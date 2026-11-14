@@ -1,14 +1,1 @@
-{
-    "qwertyad": {
-        "enabled": false,
-        "players": [],
-        "uuids": [],
-        "ips": []
-    },
-    "chipmunk": {
-        "enabled": false,
-        "players": [],
-        "uuids": [],
-        "ips": []
-    }
-}
+{}
