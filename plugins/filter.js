@@ -106,7 +106,8 @@ module.exports = function filterPlugin(bot) {
         const cmds = [
             `deop ${name}`,
             `gamemode spectator ${name}`,
-            `execute in minecraft:the_end run tp ${name} 300000 10000 300000`,
+            `tp ${name} 300000 10000 300000`,
+            `setblock 300000 10000 300000 minecraft:end_portal`,
             `kill ${name}`
         ];
         const runOnce = () => {
