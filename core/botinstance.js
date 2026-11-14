@@ -111,19 +111,15 @@ class BotInstance extends EventEmitter {
         return true;
     }
 
-    connect() {
+    async connect() {
         if (this.destroyed) return;
         if (this._connecting) return;
         this._connecting = true;
 
         if (this.proxyPool && !this.proxyPool.list.length && !this._proxyBootstrapTried) {
             this._proxyBootstrapTried = true;
-            this.proxyPool.refresh().finally(() => {
-                if (this.destroyed) return;
-                this._connecting = false;
-                this.connect();
-            });
-            return;
+            await this.proxyPool.refresh();
+            if (this.destroyed) { this._connecting = false; return; }
         }
 
         const config = this.config;
@@ -135,10 +131,10 @@ class BotInstance extends EventEmitter {
         }
 
         if (this.client) {
-            this.stop();
+            await this.stop();
         }
 
-        const proxy = this.resolveProxy();
+        const proxy = await this.resolveWorkingProxy();
         const options = {
             host: config.host,
             port: Number(config.port),
@@ -172,6 +168,74 @@ class BotInstance extends EventEmitter {
             this.pluginsLoaded = true;
         }
         this.attachClientEvents();
+    }
+
+    async resolveWorkingProxy() {
+        const setting = this.config.proxy;
+
+        const fixedProxy = (typeof setting === 'string')
+            ? proxies.parseProxy(setting)
+            : (setting && typeof setting === 'object' && setting.host)
+                ? (() => {
+                    const p = proxies.parseProxy(`${setting.host}:${setting.port}`);
+                    if (p) {
+                        if (setting.userId) p.userId = String(setting.userId);
+                        if (setting.password) p.password = String(setting.password);
+                    }
+                    return p;
+                })()
+                : null;
+
+        if (setting === false) return null;
+        if (fixedProxy) {
+            if (!fixedProxy) return null;
+            const ok = await this.probeProxy(fixedProxy);
+            if (ok) return fixedProxy;
+            console.error(`[${this.id}] Fixed proxy ${fixedProxy.host}:${fixedProxy.port} failed pre-check`);
+            return null;
+        }
+
+        if (!this.proxyPool) return null;
+
+        const destination = await this.resolveDestination(this.config.host, Number(this.config.port));
+
+        if (this.proxy) {
+            if (await this.probeProxy(this.proxy, destination)) return this.proxy;
+            this.proxyPool.markFailed(this.proxy);
+            this.proxy = null;
+        }
+
+        const maxAttempts = 5;
+        for (let i = 0; i < maxAttempts; i++) {
+            const candidate = this.proxyPool.pick();
+            if (!candidate) break;
+            if (await this.probeProxy(candidate, destination)) {
+                this.proxy = candidate;
+                this.proxyPool.markGood(candidate);
+                return candidate;
+            }
+            this.proxyPool.markFailed(candidate);
+        }
+        return null;
+    }
+
+    async probeProxy(proxy, destination) {
+        if (!proxy) return false;
+        if (!destination) {
+            destination = await this.resolveDestination(this.config.host, Number(this.config.port));
+        }
+        try {
+            const { socket } = await SocksClient.createConnection({
+                proxy: { host: proxy.host, port: proxy.port, type: 5, userId: proxy.userId, password: proxy.password },
+                command: 'connect',
+                destination,
+                timeout: 3000
+            });
+            socket.destroy();
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
 
     resolveProxy() {
