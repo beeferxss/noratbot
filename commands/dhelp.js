@@ -40,7 +40,7 @@ function sendMenu(ctx) {
             text: LEVELS[lvl].name,
             color: accessible ? LEVELS[lvl].color : 'dark_gray',
             bold: true,
-            click_event: accessible ? { action: 'suggest_command', command: `${PREFIX}dhelp rank ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
+            click_event: accessible ? { action: 'run_command', command: `${PREFIX}dhelp rank ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
             hover_event: { action: 'show_text', value: { text: accessible ? `View ${LEVELS[lvl].name} commands` : 'Requires higher rank', color: accessible ? 'green' : 'red' } }
         });
         out.push({ text: '  ', color: 'gray' });
@@ -52,7 +52,7 @@ function sendMenu(ctx) {
             text: cat,
             color: '#55aaff',
             bold: true,
-            click_event: { action: 'suggest_command', command: `${PREFIX}dhelp cat ${cat.toLowerCase()}` },
+            click_event: { action: 'run_command', command: `${PREFIX}dhelp cat ${cat.toLowerCase()}` },
             hover_event: { action: 'show_text', value: { text: `View ${cat} commands`, color: 'green' } }
         });
         out.push({ text: '  ', color: 'gray' });
@@ -78,7 +78,7 @@ function sendRank(ctx, level) {
         out.push({
             text: cmd.name,
             color: LEVELS[level].color,
-            click_event: { action: 'suggest_command', command: `${PREFIX}help ${cmd.name}` },
+            click_event: { action: 'run_command', command: `${PREFIX}help ${cmd.name}` },
             hover_event: { action: 'show_text', value: { text: usageOf(cmd), color: 'white' } }
         });
         if (i < all.length - 1) out.push({ text: ' · ', color: 'dark_gray' });
@@ -88,7 +88,7 @@ function sendRank(ctx, level) {
     out.push({
         text: '← Back',
         color: '#55aaff',
-        click_event: { action: 'suggest_command', command: `${PREFIX}dhelp` },
+        click_event: { action: 'run_command', command: `${PREFIX}dhelp` },
         hover_event: { action: 'show_text', value: { text: 'Return to categories', color: 'green' } }
     });
 
@@ -109,7 +109,7 @@ function sendCategory(ctx, catName) {
         out.push({
             text: cmd.name,
             color: '#55aaff',
-            click_event: { action: 'suggest_command', command: `${PREFIX}help ${cmd.name}` },
+            click_event: { action: 'run_command', command: `${PREFIX}help ${cmd.name}` },
             hover_event: { action: 'show_text', value: { text: usageOf(cmd), color: 'white' } }
         });
         if (i < all.length - 1) out.push({ text: ' · ', color: 'dark_gray' });
@@ -119,7 +119,7 @@ function sendCategory(ctx, catName) {
     out.push({
         text: '← Back',
         color: '#55aaff',
-        click_event: { action: 'suggest_command', command: `${PREFIX}dhelp` },
+        click_event: { action: 'run_command', command: `${PREFIX}dhelp` },
         hover_event: { action: 'show_text', value: { text: 'Return to categories', color: 'green' } }
     });
 
