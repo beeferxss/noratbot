@@ -1,6 +1,7 @@
 module.exports = {
     name: 'whitelist',
     description: 'Manage whitelist (on/off, add/remove players)',
+    usage: 'whitelist <on|off|add|remove|list|clear>',
     aliases: ['wl'],
     level: 1,
 

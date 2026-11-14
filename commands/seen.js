@@ -20,6 +20,7 @@ function timeAgo(ms) {
 module.exports = {
     name: 'seen',
     description: 'Show when a player was last seen',
+    usage: 'seen <player>',
     level: 0,
 
     async execute(ctx) {

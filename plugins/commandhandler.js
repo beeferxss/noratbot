@@ -259,6 +259,14 @@ if (!uuid) {
     };
 
     try {
+        const usage = String(cmd.usage || '').trim();
+        if ((!args || args.length === 0) && usage && usage !== cmd.name && /\s/.test(usage) && cmd.name !== 'help') {
+            const helpCmd = registry.get('help');
+            if (helpCmd) {
+                await helpCmd.execute({ ...ctx, args: [cmd.name] });
+                return;
+            }
+        }
         await cmd.execute(ctx);
     } catch (e) {
         console.error(`[${bot.id}] [CommandHandler] Error in "${cmd.name}":`, e);

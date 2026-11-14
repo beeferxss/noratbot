@@ -5,6 +5,7 @@
 module.exports = {
     name: 'core',
     description: 'Run a command in the core and show its output',
+    usage: 'core <command>',
     level: 2,
 
     async execute(ctx) {
