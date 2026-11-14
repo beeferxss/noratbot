@@ -207,6 +207,10 @@ module.exports = function playersDatabase(bot) {
             ranIt = bot.core._lastRunOk !== false;
             const match = output && output.match(IP_REGEX);
 
+            if (!match) {
+                console.log(`[${bot.id}] [PlayersDB] no IP match for ${target.username}; output=${JSON.stringify(output)}`);
+            }
+
             if (match) {
                 target.ip = match[1];
                 target._needsIpRefresh = false;
