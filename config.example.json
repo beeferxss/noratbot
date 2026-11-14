@@ -64,6 +64,19 @@
     }
   },
 
+  "proxy": {
+    "enabled": true,
+    "sources": [
+      "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&protocol=socks5&proxy_format=ipport&format=text&timeout=5000",
+      "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
+      "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt"
+    ],
+    "refreshMinutes": 20,
+    "failureCooldownMinutes": 15,
+    "connectTimeout": 8000,
+    "maxListSize": 4000
+  },
+
   "discord": {
     "enabled": true,
     "token": "",

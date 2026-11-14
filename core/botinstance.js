@@ -2,6 +2,11 @@ const EventEmitter = require('events');
 const mc = require('minecraft-protocol');
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns');
+const { SocksClient } = require('socks');
+const proxies = require('../utils/proxies');
+
+const PROXY_CONNECT_TIMEOUT = 8000;
 function formatDisconnectReason(reason) {
     if (!reason) return 'Unknown reason';
     if (typeof reason === 'string') return reason;
@@ -88,6 +93,9 @@ class BotInstance extends EventEmitter {
         this._disconnectReason = null;
         this._errorReason = null;
         this._connecting = false;
+        this.proxyPool = proxies.forConfig(this.globalConfig);
+        this.proxy = null;
+        this._proxyBootstrapTried = false;
     }
 
     log(message) {
@@ -108,6 +116,16 @@ class BotInstance extends EventEmitter {
         if (this._connecting) return;
         this._connecting = true;
 
+        if (this.proxyPool && !this.proxyPool.list.length && !this._proxyBootstrapTried) {
+            this._proxyBootstrapTried = true;
+            this.proxyPool.refresh().finally(() => {
+                if (this.destroyed) return;
+                this._connecting = false;
+                this.connect();
+            });
+            return;
+        }
+
         const config = this.config;
         if (!config.host || !config.port) {
             this.emit('bot:error', new Error('Minecraft host/port is missing'));
@@ -120,15 +138,26 @@ class BotInstance extends EventEmitter {
             this.stop();
         }
 
+        const proxy = this.resolveProxy();
+        const options = {
+            host: config.host,
+            port: Number(config.port),
+            username: config.username,
+            version: config.version,
+            auth: config.auth || 'offline'
+        };
+
+        if (proxy) {
+            options.connect = client => {
+                this.openProxyTunnel(client, proxy, options).catch(error => {
+                    this.handleProxyFailure(client, proxy, error);
+                });
+            };
+        }
+
         let client;
         try {
-            client = mc.createClient({
-                host: config.host,
-                port: Number(config.port),
-                username: config.username,
-                version: config.version,
-                auth: config.auth || 'offline'
-            });
+            client = mc.createClient(options);
         } catch (error) {
             this.emit('bot:error', error);
             this._connecting = false;
@@ -145,6 +174,92 @@ class BotInstance extends EventEmitter {
         this.attachClientEvents();
     }
 
+    resolveProxy() {
+        const setting = this.config.proxy;
+        if (setting === false) return null;
+
+        if (typeof setting === 'string') {
+            const fixed = proxies.parseProxy(setting);
+            if (fixed) return fixed;
+            console.error(`[${this.id}] Invalid proxy config: ${setting}`);
+            return null;
+        }
+
+        if (setting && typeof setting === 'object' && setting.host) {
+            const fixed = proxies.parseProxy(`${setting.host}:${setting.port}`);
+            if (fixed) {
+                if (setting.userId) fixed.userId = String(setting.userId);
+                if (setting.password) fixed.password = String(setting.password);
+                return fixed;
+            }
+            console.error(`[${this.id}] Invalid proxy config`);
+            return null;
+        }
+
+        if (!this.proxyPool) return null;
+        if (!this.proxy) this.proxy = this.proxyPool.pick();
+        return this.proxy;
+    }
+
+    handleProxyFailure(client, proxy, error) {
+        if (this.client !== client) return;
+        if (this.proxyPool) this.proxyPool.markFailed(proxy);
+        if (this.proxy === proxy) this.proxy = null;
+        this.emit('bot:error', error);
+        console.error(`[${this.id}] Proxy ${proxy.host}:${proxy.port} failed:`, error.message || error);
+
+        client.removeAllListeners();
+        this.client = null;
+        this.bot = null;
+        this.ready = false;
+        this.started = false;
+        this._connecting = false;
+        this.emit('bot:disconnect', `proxy ${proxy.host}:${proxy.port} failed`);
+        if (this.globalConfig?.minecraft?.connection?.autoReconnect !== false && !this.destroyed) {
+            this.scheduleReconnect();
+        }
+    }
+
+    async openProxyTunnel(client, proxy, options) {
+        const destination = await this.resolveDestination(options.host, options.port);
+        const { socket } = await SocksClient.createConnection({
+            proxy: {
+                host: proxy.host,
+                port: proxy.port,
+                type: 5,
+                userId: proxy.userId,
+                password: proxy.password
+            },
+            command: 'connect',
+            destination,
+            timeout: PROXY_CONNECT_TIMEOUT
+        });
+        if (this.client && this.client !== client) {
+            socket.destroy();
+            return;
+        }
+        this.log(`Connected through ${proxy.host}:${proxy.port}`);
+        client.setSocket(socket);
+        client.emit('connect');
+    }
+
+    resolveDestination(host, port) {
+        if (port !== 25565 || /^[0-9.]+$/.test(host) || host === 'localhost') {
+            return Promise.resolve({ host, port });
+        }
+        return new Promise(resolve => {
+            const timer = setTimeout(() => resolve({ host, port }), 3000);
+            dns.resolveSrv(`_minecraft._tcp.${host}`, (error, records) => {
+                clearTimeout(timer);
+                if (!error && records && records.length) {
+                    resolve({ host: records[0].name, port: records[0].port });
+                } else {
+                    resolve({ host, port });
+                }
+            });
+        });
+    }
+
     attachClientEvents() {
         const client = this.client;
         let disconnectSent = false; 
@@ -156,6 +271,7 @@ class BotInstance extends EventEmitter {
             this._connecting = false;
             disconnectSent = false;
             this._errorReason = null;
+            if (this.proxy && this.proxyPool) this.proxyPool.markGood(this.proxy);
             this.emit('login');
             this.emit('bot:login');
             this.log(`Connected to server`);
@@ -174,6 +290,10 @@ class BotInstance extends EventEmitter {
 
         client.on('error', error => {
             this._errorReason = error.message || 'ECONNRESET';
+            if (!this.ready && this.proxy && this.proxyPool) {
+                this.proxyPool.markFailed(this.proxy);
+                this.proxy = null;
+            }
             this.emit('bot:error', error);
             console.error(`[${this.id}] Minecraft error:`, error);
         });
