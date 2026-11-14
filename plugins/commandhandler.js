@@ -240,9 +240,37 @@ if (!uuid) {
             if (!bot.core || typeof bot.core.run !== 'function') return false;
             return bot.core.run(cmd);
         },
+        transformClicks(node) {
+            if (!bot.clickTokens || typeof bot.clickTokens.register !== 'function') return node;
+            if (Array.isArray(node)) return node.map(n => this.transformClicks(n));
+            if (!node || typeof node !== 'object') return node;
+            const out = { ...node };
+            if (out.click_event && out.click_event.action === 'suggest_command' && typeof out.click_event.command === 'string') {
+                const commandString = out.click_event.command.trim();
+                const prefixes = (bot.globalConfig?.bot?.prefix || bot.globalConfig?.bot?.prefixes || ['nr:']);
+                const usedPrefix = prefixes.find(p => commandString.toLowerCase().startsWith(String(p).toLowerCase())) || '';
+                const raw = usedPrefix ? commandString.slice(usedPrefix.length).trim() : commandString;
+                const parts = raw.split(/\s+/).filter(Boolean);
+                const cmdName = (parts.shift() || '').toLowerCase();
+                const args = parts;
+                if (cmdName) {
+                    const tokenCmd = bot.clickTokens.register(cmd.name || cmdName, async (clickerName, clickerPlayer) => {
+                        await bot.commands.execute(cmdName, args, commandString, msg, clickerPlayer);
+                    });
+                    out.click_event = { action: 'run_command', command: tokenCmd };
+                }
+            }
+            for (const key of Object.keys(out)) {
+                if (out[key] && typeof out[key] === 'object') {
+                    out[key] = this.transformClicks(out[key]);
+                }
+            }
+            return out;
+        },
         tellraw(target, text) {
             if (!bot.core || typeof bot.core.run !== 'function') return false;
-            const json = typeof text === 'string' ? JSON.stringify({ text }) : JSON.stringify(text);
+            const transformed = this.transformClicks(text);
+            const json = typeof transformed === 'string' ? JSON.stringify({ text: transformed }) : JSON.stringify(transformed);
             return bot.core.run(`tellraw ${target} ${json}`);
         },
         tellrawCommand: isConsole
