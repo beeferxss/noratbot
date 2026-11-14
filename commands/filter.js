@@ -10,7 +10,7 @@ module.exports = {
     async execute(ctx) {
         const args = ctx.args;
         if (!args.length) {
-            ctx.tellrawCommand('Usage: filter <list|add|remove|add-uuid|remove-uuid|clear|clear-uuid|regex> ...');
+            ctx.tellrawCommand('Usage: filter <on|off|list|add|remove|add-uuid|remove-uuid|clear|clear-uuid|regex> ...');
             return;
         }
 
@@ -28,12 +28,24 @@ module.exports = {
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ||
             /^[0-9a-f]{32}$/i.test(s);
 
+        if (sub === 'on') {
+            const ok = f.on ? f.on() : false;
+            say(ok ? 'Filter enabled.' : 'Failed to enable filter.');
+            return;
+        }
+
+        if (sub === 'off') {
+            const ok = f.off ? f.off() : false;
+            say(ok ? 'Filter disabled.' : 'Failed to disable filter.');
+            return;
+        }
+
         if (sub === 'list') {
             const players = f.listPlayers() || [];
             const uuids = f.listUUIDs() || [];
             const regex = f.getRegex();
             const ips = f.listIPs() || [];
-            say(`Players: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}\nRegex: ${regex || '(none)'}`);
+            say(`Filter: ${f.isEnabled ? (f.isEnabled() ? 'ON' : 'OFF') : 'ON'}\nPlayers: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}\nRegex: ${regex || '(none)'}`);
             return;
         }
 

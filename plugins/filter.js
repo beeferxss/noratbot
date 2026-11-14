@@ -39,9 +39,10 @@ module.exports = function filterPlugin(bot) {
     function getServerData() {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { players: [], uuids: [], ips: [], regex: null };
+            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null };
             saveData(all);
         }
+        if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = true;
         if (!Array.isArray(all[bot.id].ips)) all[bot.id].ips = [];
         return all[bot.id];
     }
@@ -49,8 +50,9 @@ module.exports = function filterPlugin(bot) {
     function updateServerData(updateFn) {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { players: [], uuids: [], ips: [], regex: null };
+            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null };
         }
+        if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = true;
         updateFn(all[bot.id]);
         saveData(all);
     }
@@ -66,6 +68,7 @@ module.exports = function filterPlugin(bot) {
 
     function shouldFilter(player) {
         const data = getServerData();
+        if (data.enabled === false) return false;
         const name = player.username || player.name;
         const uuid = player.uuid;
         const botName = bot.config?.username || bot.username || '';
@@ -113,6 +116,7 @@ module.exports = function filterPlugin(bot) {
 
     function sweep() {
         if (!bot.ready) return;
+        if (getServerData().enabled === false) return;
         if (!bot.playersAPI || typeof bot.playersAPI.getAll !== 'function') return;
         const players = bot.playersAPI.getAll();
         if (!players || !players.length) return;
@@ -142,6 +146,10 @@ module.exports = function filterPlugin(bot) {
     bot.on('bot:destroy', () => clearInterval(scanTimer));
 
     bot.filter = {
+        isEnabled() { return getServerData().enabled !== false; },
+        on() { updateServerData(d => { d.enabled = true; }); sweep(); return true; },
+        off() { updateServerData(d => { d.enabled = false; }); return true; },
+
         get() {
             const data = getServerData();
             return { players: [...data.players], uuids: [...data.uuids], regex: data.regex };

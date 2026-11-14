@@ -186,13 +186,19 @@ module.exports = {
         }
 
         const allServers = args.some(a => ALL_SERVER_FLAGS.includes(String(a).toLowerCase()));
-        const player = args
-            .filter(a => !ALL_SERVER_FLAGS.includes(String(a).toLowerCase()))
-            .join(' ')
-            .trim();
+        const rest = args.filter(a => !ALL_SERVER_FLAGS.includes(String(a).toLowerCase()));
+
+        // optional trailing page number
+        let page = 1;
+        let playerArgs = rest;
+        if (rest.length && /^\d+$/.test(String(rest[rest.length - 1]))) {
+            page = parseInt(rest[rest.length - 1], 10) || 1;
+            playerArgs = rest.slice(0, -1);
+        }
+        const player = playerArgs.join(' ').trim();
 
         if (!player) {
-            return ctx.tellrawCommand('Usage: ip [-allservers] <player>');
+            return ctx.tellrawCommand('Usage: ip [-allservers] <player> [page]');
         }
 
         const prefix = ctx.prefix || 'nr:';
@@ -203,9 +209,13 @@ module.exports = {
                 return ctx.tellrawCommand('The player database is disabled or not loaded.');
             }
 
+            const pageSize = 10;
+            const totalPages = Math.max(1, Math.ceil(ips.length / pageSize));
+            page = Math.min(Math.max(1, page), totalPages);
+
             const header = allServers
-                ? `bananabot - IPs of player ${player} (all servers) (${ips.length})`
-                : `bananabot - IPs of player ${player} (${ips.length})`;
+                ? `bananabot - IPs of player ${player} (all servers) (${ips.length}) - page ${page}/${totalPages}`
+                : `bananabot - IPs of player ${player} (${ips.length}) - page ${page}/${totalPages}`;
             const headerComps = gradient.gradient(header, '#f4fcff', '#238bff');
 
             if (!ips.length) {
@@ -214,14 +224,18 @@ module.exports = {
                 return send(ctx, headerComps);
             }
 
-            const nameComps = ips.map((ip, i) => {
+            const start = (page - 1) * pageSize;
+            const pageIps = ips.slice(start, start + pageSize);
+
+            const nameComps = pageIps.map((ip, i) => {
                 const seen = ip.time
                     ? `Last used ${timeAgo(ip.time)} (${formatDate(ip.time)})`
                     : 'Last used: unknown';
                 const where = ip.server ? `\nServer: ${ip.server}` : '';
+                const label = ip.server ? `${ip.ip} [${ip.server}]` : ip.ip;
                 return {
-                    text: ip.ip + ' ',
-                    color: i % 2 === 0 ? COLORS.primary : COLORS.secondary,
+                    text: label + ' ',
+                    color: (start + i) % 2 === 0 ? COLORS.primary : COLORS.secondary,
                     click_event: { action: 'suggest_command', command: `${prefix}alts ${ip.ip}` },
                     hover_event: {
                         action: 'show_text',
@@ -230,12 +244,8 @@ module.exports = {
                 };
             });
 
-            const PER_MESSAGE = 40;
             headerComps.push({ text: '\n', color: COLORS.label });
-            send(ctx, [...headerComps, ...nameComps.slice(0, PER_MESSAGE)]);
-            for (let i = PER_MESSAGE; i < nameComps.length; i += PER_MESSAGE) {
-                send(ctx, nameComps.slice(i, i + PER_MESSAGE));
-            }
+            send(ctx, [...headerComps, ...nameComps]);
         } catch (err) {
             console.error(`[${bot?.id}] [ip] Failed:`, err);
             ctx.tellrawCommand('Failed to look up IPs.');
