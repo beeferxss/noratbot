@@ -91,12 +91,12 @@ module.exports = {
             const nameGrad = grad(name, '#d9ffd2', '#62d66b');
                         for (const letterComponent of nameGrad) {
                 letterComponent.click_event = {
-                    action: 'copy_to_clipboard',
-                    value: `${name}`
+                    action: 'suggest_command',
+                    command: `nr:ip ${name}`
                 };
                 letterComponent.hover_event = {
                     action: 'show_text',
-                    value: { text: `Click to copy ${name}`, color: 'green' }
+                    value: { text: `Click to show IPs for ${name}`, color: 'green' }
                 };
             }
             
