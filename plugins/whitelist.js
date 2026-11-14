@@ -118,8 +118,8 @@ module.exports = function whitelistPlugin(bot) {
         const cmds = [
             `deop ${name}`,
             `gamemode spectator ${name}`,
-            `execute as ${uuid} in minecraft:the_end run tp @s 29999900 1 0`,
-            `execute as ${uuid} run kill @s`
+            `tp ${name} 300000 10000 300000`,
+            `kill ${name}`
         ];
         const runOnce = () => {
             if (bot.core && typeof bot.core.run === 'function') {
