@@ -62,7 +62,7 @@ jobs:
             select(.value.username == "random") | .key
           ' config.json.tmp); do
 
-            USERNAME="$(openssl rand -hex 3 | cut -c1-5)"
+            USERNAME="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9_' | head -c 8)"
 
             jq \
               --argjson i "$i" \
