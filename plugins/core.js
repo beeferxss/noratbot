@@ -83,6 +83,7 @@ module.exports = function core(bot) {
     let damageDuringRefill = false;
     let backupReady = false;
     let graceUntil = 0;
+    let refillRetryScheduled = false;
     let initialTimer = null;
     let chunkTimer = null;
     let damageTimer = null;
@@ -282,6 +283,14 @@ module.exports = function core(bot) {
         }
 
         if (!success) {
+            // one retry after a short delay
+            if (!refillRetryScheduled) {
+                refillRetryScheduled = true;
+                setTimeout(() => {
+                    refillRetryScheduled = false;
+                    if (REFILL_ENABLED && !refilling && !cooldown) bot.core.refill('retry');
+                }, 2000);
+            }
             refilling = false;
             return false;
         }
