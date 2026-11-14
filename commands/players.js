@@ -81,7 +81,7 @@ module.exports = {
 
         const srv = target.id || 'current';
         const components = [];
-        const header = grad(`noratbot - Online players on ${srv} (page ${page}/${totalPages})`, '#f4fcff', '#238bff');
+        const header = grad(`bananabot - Online players on ${srv} (page ${page}/${totalPages})`, '#f4fcff', '#238bff');
         components.push(...header);
         components.push({ text: "\n", color: "#aaaaaa" });
         for (const p of pagePlayers) {

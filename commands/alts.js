@@ -121,8 +121,8 @@ module.exports = {
             const alts = normalizeAlts(raw).sort((a, b) => b.time - a.time);
 
             const header = isIP
-                ? `noratbot - Alts of IP ${player} (${alts.length})`
-                : `noratbot - Alts of player ${player} (${targetIP}) - ${alts.length} found`;
+                ? `bananabot - Alts of IP ${player} (${alts.length})`
+                : `bananabot - Alts of player ${player} (${targetIP}) - ${alts.length} found`;
             const headerComps = gradient.gradient(header, '#f4fcff', '#238bff');
 
             if (!alts.length) {

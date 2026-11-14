@@ -87,7 +87,7 @@ function sendList(ctx, onlyLevel) {
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     const out = [];
-    out.push(...grad('noratbot - Commands', '#f4fcff', '#238bff'));
+    out.push(...grad('bananabot - Commands', '#f4fcff', '#238bff'));
     out.push({ text: '\n', color: 'gray' });
 
     for (const lvl of Object.keys(LEVELS).map(Number)) {

@@ -27,7 +27,7 @@ const COLORS = Object.freeze({
     warning: 0xFEE75C
 });
 
-const FOOTER = 'noratbot • Discord';
+const FOOTER = 'bananabot • Discord';
 const COMMAND_PREFIX = '!';
 
 const RELAY = Object.freeze({
@@ -796,20 +796,20 @@ async function relayDiscordMessage(bot, message) {
     let suffix = replyTarget ? ` (reply to @${replyTarget}): ${body}` : `: ${body}`;
     if (suffix.length > 500) suffix = suffix.slice(0, 497) + '...';
 
-    const visible = `[noratbot Discord] ${author}${suffix}`;
+    const visible = `[bananabot Discord] ${author}${suffix}`;
     noteEcho(bot, visible);
 
     const link = bot.globalConfig?.discord?.link || 'https://discord.gg';
 
     const extra = [
         {
-            text: '[noratbot Discord] ',
+            text: '[bananabot Discord] ',
             color: '#55aaff',
             click_event: { action: 'copy_to_clipboard', value: link },
             hover_event: {
                 action: 'show_text',
                 value: {
-                    text: `noratbot Discord\n\nLink: ${link}`,
+                    text: `bananabot Discord\n\nLink: ${link}`,
                     color: 'aqua'
                 }
             }
@@ -1134,7 +1134,7 @@ function buildMinecraftContext(cmd, invocation) {
     const uuid = bot?.commands?.getPlayerUUID?.(username) || null;
 
     const send = (text, options = {}) => sendOutput(invocation.responder, String(text ?? ''), {
-        title: options.title ?? `${cmd.name} • ${bot?.id || 'noratbot'}`,
+        title: options.title ?? `${cmd.name} • ${bot?.id || 'bananabot'}`,
         color: options.color ?? rankColor(invocation.rank),
         footer: options.footer ?? `${FOOTER} • ${invocation.rank}`
     });

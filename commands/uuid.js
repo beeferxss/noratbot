@@ -48,8 +48,8 @@ module.exports = {
         }
 
         let fullMessage = isSelf 
-            ? `noratbot - Your UUID: ${uuid}` 
-            : `noratbot - UUID of ${targetName}: ${uuid}`;
+            ? `bananabot - Your UUID: ${uuid}` 
+            : `bananabot - UUID of ${targetName}: ${uuid}`;
 
 
         const comps = gradient.gradient(fullMessage, '#f4fcff', '#238bff');

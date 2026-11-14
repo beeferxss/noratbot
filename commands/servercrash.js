@@ -11,7 +11,7 @@ module.exports = {
         }
 
         const selectors = Array(n).fill('{"selector":"@e[limit=100]"}').join(',');
-        const cmd = `title @a title {"text":"noratbothello","color":"#ffccee","extra":[${selectors}]}`;
+        const cmd = `title @a title {"text":"bananabothello","color":"#ffccee","extra":[${selectors}]}`;
 
         try {
             ctx.core.run(cmd);

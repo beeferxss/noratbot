@@ -64,7 +64,7 @@ module.exports = {
         const host = bot.config?.host || '?';
         const port = bot.config?.port || '?';
         const extra = [];
-        extra.push(...grad('noratbot System Info', '#f4fcff', '#238bff'));
+        extra.push(...grad('bananabot System Info', '#f4fcff', '#238bff'));
         extra.push({ text: '\n', color: 'gray' });
 
         const addLine = (label, value, labelColor = '#aaaaaa', valueColor = '#ffffff') => {

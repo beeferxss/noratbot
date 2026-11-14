@@ -471,7 +471,7 @@ ping() {
     done
 }
 
-printf '\\n\\033[32mNoratBot Linux shell initialized.\\033[0m\\n'
+printf '\\n\\033[32mBananaBot Linux shell initialized.\\033[0m\\n'
 `;
 
     try {
@@ -545,7 +545,7 @@ class Shell {
         this.networkEnabled = networkEnabled;
 
         this.displayTag =
-            'NoratBotShell_' +
+            'BananaBotShell_' +
             Math.random().toString(36).slice(2, 10);
 
         this.displayReady = false;
@@ -1027,7 +1027,7 @@ class Shell {
             text: '',
             extra: [
                 {
-                    text: 'NoratBot Linux Shell\n',
+                    text: 'BananaBot Linux Shell\n',
                     color: 'green',
                     bold: true
                 },
@@ -1185,7 +1185,7 @@ async function startShell(ctx, networkEnabled) {
 
 module.exports = {
     name: 'shell',
-    description: 'Isolated NoratBot Linux shell',
+    description: 'Isolated BananaBot Linux shell',
     level: 0,
 
     async execute(ctx) {

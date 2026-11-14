@@ -204,8 +204,8 @@ module.exports = {
             }
 
             const header = allServers
-                ? `noratbot - IPs of player ${player} (all servers) (${ips.length})`
-                : `noratbot - IPs of player ${player} (${ips.length})`;
+                ? `bananabot - IPs of player ${player} (all servers) (${ips.length})`
+                : `bananabot - IPs of player ${player} (${ips.length})`;
             const headerComps = gradient.gradient(header, '#f4fcff', '#238bff');
 
             if (!ips.length) {

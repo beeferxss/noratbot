@@ -615,7 +615,7 @@ module.exports = function musicPlugin(bot) {
     let volume = 1.0;
     let pitch = 0;
     let displayMode = 'actionbar';
-    let bossbarId = 'noratbot_music';
+    let bossbarId = 'bananabot_music';
     let bossbarActive = false;
     let displayInterval = null;
     let ticksUntilPausedActionbar = 20;
@@ -669,7 +669,7 @@ module.exports = function musicPlugin(bot) {
     }
 
     function generateActionbar() {
-        if (!currentSong) return '♫ noratbot music';
+        if (!currentSong) return '♫ bananabot music';
 
         const name = currentSong.name || 'Unknown';
         const current = currentSong.time;

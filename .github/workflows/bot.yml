@@ -1,4 +1,4 @@
-name: NoratBot
+name: BananaBot
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: noratbot-${{ github.ref }}
+  group: bananabot-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -155,7 +155,7 @@ jobs:
 
           WORKFLOW_ID="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/workflows" \
-            --jq '[.workflows[] | select(.name == "NoratBot" and .state == "active")] | first | .id')"
+            --jq '[.workflows[] | select(.name == "BananaBot" and .state == "active")] | first | .id')"
 
           if [[ -z "$WORKFLOW_ID" || "$WORKFLOW_ID" == "null" ]]; then
             exit 1
