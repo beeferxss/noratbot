@@ -195,17 +195,13 @@ async function exec(cmdName, args, raw, msg, player) {
     if (isConsole) {
         // Console execution is already an authenticated local admin source.
     } else if (chatBind && (Date.now() - chatBind.ts < 15000)) {
-        uuid = chatBind.uuid;
-if (!uuid) {
+        uuid = chatBind.uuid;    if (!uuid) {
     console.error(`[CommandHandler] No UUID for ${name}`);
-    if (bot.core?.ready) bot.core.run(`tellraw @a {"text":"[nr] cannot resolve UUID for ${name}","color":"red"}`);
     return;
 }
     } else {
-        uuid = getUUID(name);
-if (!uuid) {
+        uuid = getUUID(name);    if (!uuid) {
     console.error(`[CommandHandler] No UUID for ${name}`);
-    if (bot.core?.ready) bot.core.run(`tellraw @a {"text":"[nr] cannot resolve UUID for ${name}","color":"red"}`);
     return;
 }
     }
@@ -287,7 +283,6 @@ if (!uuid) {
         for (const [k, v] of recentChatPlain) { if (now - v > 5000) recentChatPlain.delete(k); }
 
         const player = extractPlayer(clean);
-        if (logSettings.commands !== false) console.log(`[${bot.id}] [CommandHandler] chat_plain candidate: ${clean} -> ${player ? player.username + ' :: ' + player.commandText : 'null'}`);
         if (!player) return;
 
         const cmdText = player.commandText;

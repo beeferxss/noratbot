@@ -106,16 +106,6 @@ jobs:
                   fflush()
                   next
                 }
-                /\[CommandHandler\]/ {
-                  print
-                  fflush()
-                  next
-                }
-                /\[ChatParser\]/ {
-                  print
-                  fflush()
-                  next
-                }
               '
 
             exit_code=${PIPESTATUS[0]}

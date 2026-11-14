@@ -306,7 +306,6 @@ function write(bot, v) {
     process.stdout.write(`[${bot.id}] ` + result + RESET + '\n');
     bot.emit('chat_display', displayText);
     bot.emit('chat_display_ansi', result);
-    if (bot.globalConfig?.logging?.commands !== false) console.log(`[${bot.id}] [ChatParser] plainForCommands: ${plainForCommands}`);
     bot.emit('chat_plain', plainForCommands);
 }
 module.exports = function chatParser(bot) {
