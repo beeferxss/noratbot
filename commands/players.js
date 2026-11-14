@@ -159,7 +159,6 @@ module.exports = {
             extra: components
         };
 
-        const commandText = `tellraw @a ${toSNBT(rootObject)}`;
-        ctx.run(commandText);
+        ctx.tellraw('@a', rootObject);
     }
 };

@@ -111,10 +111,39 @@ module.exports = function clickTokensPlugin(bot) {
 
     bot.on('chat_plain', handleChat);
 
+    function transform(components, source) {
+        if (!bot.clickTokens || typeof bot.clickTokens.register !== 'function') return components;
+        if (Array.isArray(components)) return components.map(c => transform(c, source));
+        if (!components || typeof components !== 'object') return components;
+        const out = { ...components };
+        if (out.click_event && out.click_event.action === 'suggest_command' && typeof out.click_event.command === 'string') {
+            const commandString = out.click_event.command.trim();
+            const prefixes = (bot.globalConfig?.bot?.prefix || bot.globalConfig?.bot?.prefixes || ['nr:']);
+            const usedPrefix = prefixes.find(p => commandString.toLowerCase().startsWith(String(p).toLowerCase())) || '';
+            const raw = usedPrefix ? commandString.slice(usedPrefix.length).trim() : commandString;
+            const parts = raw.split(/\s+/).filter(Boolean);
+            const cmdName = (parts.shift() || '').toLowerCase();
+            const args = parts;
+            if (cmdName) {
+                const tokenCmd = register(source || cmdName, async (clickerName, clickerPlayer) => {
+                    await bot.commands.execute(cmdName, args, commandString, null, clickerPlayer);
+                });
+                out.click_event = { action: 'run_command', command: tokenCmd };
+            }
+        }
+        for (const key of Object.keys(out)) {
+            if (out[key] && typeof out[key] === 'object') {
+                out[key] = transform(out[key], source);
+            }
+        }
+        return out;
+    }
+
     bot.clickTokens = {
         register,
         invalidate,
         resolve,
+        transform,
         makeToken,
 
         component(text, tokenCmd, color, hoverText) {

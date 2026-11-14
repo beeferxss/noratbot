@@ -150,7 +150,10 @@ module.exports = function mailPlugin(bot) {
         });
 
         const msg = { text: '', extra };
-        const snbt = toSNBT(msg);
+        const transformed = (bot.clickTokens && typeof bot.clickTokens.transform === 'function')
+            ? bot.clickTokens.transform(msg, 'mail')
+            : msg;
+        const snbt = toSNBT(transformed);
         const command = `tellraw ${name} ${snbt}`;
 
         if (bot.core && bot.core.ready && typeof bot.core.run === 'function') {
