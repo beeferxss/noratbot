@@ -109,7 +109,7 @@
     "worldBorder": 29999984,
     "survivorMaxAge": 60000,
     "area": {
-      "size": 8,
+      "size": 10,
       "y": 30
     },
 
