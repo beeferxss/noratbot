@@ -927,6 +927,7 @@ function attachRelay(bot, channelId) {
         flushing: false,
         retries: 0,
         echoes: new Map(),
+        recent: new Map(),
         stopped: false
     };
 
@@ -1009,6 +1010,19 @@ function attachRelay(bot, channelId) {
         }
     };
 
+    const isDuplicate = (plain) => {
+        const now = Date.now();
+        const ts = relay.recent.get(plain);
+        if (ts && now - ts < 2000) return true;
+        relay.recent.set(plain, now);
+        if (relay.recent.size > 100) {
+            for (const [k, t] of relay.recent) {
+                if (now - t > 5000) relay.recent.delete(k);
+            }
+        }
+        return false;
+    };
+
     const onChat = (username, message) => {
         const text = (typeof username === 'string' && message != null)
             ? `${username}: ${message}`
@@ -1016,6 +1030,18 @@ function attachRelay(bot, channelId) {
         if (!text.trim()) return;
         const plain = stripAnsiCodes(text);
         if (consumeEcho(relay, plain)) return;
+        if (isDuplicate(plain)) return;
+        relay.enqueue(text);
+    };
+
+    const onChatPlain = (plainText) => {
+        if (!plainText || typeof plainText !== 'string') return;
+        const text = String(plainText).trim();
+        if (!text) return;
+        if (text.includes('[PLAYER_LIST]')) return;
+        const plain = stripAnsiCodes(text);
+        if (consumeEcho(relay, plain)) return;
+        if (isDuplicate(plain)) return;
         relay.enqueue(text);
     };
 
@@ -1041,6 +1067,7 @@ function attachRelay(bot, channelId) {
         }
 
         bot.removeListener('chat', onChat);
+        bot.removeListener('chat_plain', onChatPlain);
         bot.removeListener('bot:disconnect', onDisconnect);
         bot.removeListener('bot:destroy', onDestroy);
 
@@ -1052,6 +1079,7 @@ function attachRelay(bot, channelId) {
     };
 
     bot.on('chat', onChat);
+    bot.on('chat_plain', onChatPlain);
     bot.on('bot:disconnect', onDisconnect);
     bot.once('bot:destroy', onDestroy);
 
