@@ -4,7 +4,24 @@ const LEVELS = {
     2: { name: 'Admin', color: '#ff6b6b' }
 };
 
+const CATEGORIES = {
+    Games: ['chess', 'rps', 'snake', 'spleef', 'trivia', 'roll', 'poll', 'hangman', 'rtp'],
+    Fun: ['bruhify', 'rainbowify', 'echo', 'superecho', 'music', 'campfire', 'parkour'],
+    Utils: ['uuid', 'ip', 'cb', 'supercb', 'refill', 'remind', 'seen', 'whereami', 'uptime', 'wikipedia', 'translate', 'chattranslate', 'netmsg', 'serverchat', 'mail', 'players', 'alts'],
+    Core: ['corecmd', 'spawnproof', 'cb'],
+    Admin: ['filter', 'whitelist', 'cloop', 'discord', 'eval', 'shell', 'restart', 'stop', 'authenticate', 'validate', 'servers', 'servercrash', 'info'],
+    Other: []
+};
+
 const PREFIX = 'nr:';
+
+function categoryOf(cmd) {
+    const name = String(cmd.name).toLowerCase();
+    for (const [cat, names] of Object.entries(CATEGORIES)) {
+        if (names.includes(name)) return cat;
+    }
+    return 'Other';
+}
 
 function usageOf(cmd) {
     return PREFIX + (cmd.usage || cmd.name);
@@ -15,16 +32,28 @@ function sendMenu(ctx) {
     const out = [];
 
     out.push({ text: 'Dynamic Help', color: 'white', bold: true });
-    out.push({ text: '\nSelect a category:\n', color: 'gray' });
+    out.push({ text: '\n\nBy Rank:\n', color: 'gray' });
 
     for (const lvl of Object.keys(LEVELS).map(Number)) {
         const accessible = userLevel >= lvl;
         out.push({
-            text: `${LEVELS[lvl].name}`,
+            text: LEVELS[lvl].name,
             color: accessible ? LEVELS[lvl].color : 'dark_gray',
             bold: true,
-            click_event: accessible ? { action: 'suggest_command', command: `${PREFIX}dhelp ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
+            click_event: accessible ? { action: 'suggest_command', command: `${PREFIX}dhelp rank ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
             hover_event: { action: 'show_text', value: { text: accessible ? `View ${LEVELS[lvl].name} commands` : 'Requires higher rank', color: accessible ? 'green' : 'red' } }
+        });
+        out.push({ text: '  ', color: 'gray' });
+    }
+
+    out.push({ text: '\n\nBy Category:\n', color: 'gray' });
+    for (const cat of Object.keys(CATEGORIES)) {
+        out.push({
+            text: cat,
+            color: '#55aaff',
+            bold: true,
+            click_event: { action: 'suggest_command', command: `${PREFIX}dhelp cat ${cat.toLowerCase()}` },
+            hover_event: { action: 'show_text', value: { text: `View ${cat} commands`, color: 'green' } }
         });
         out.push({ text: '  ', color: 'gray' });
     }
@@ -36,7 +65,7 @@ function sendMenu(ctx) {
     ctx.tellraw('@a', { text: '', extra: out });
 }
 
-function sendCategory(ctx, level) {
+function sendRank(ctx, level) {
     const all = [...new Map([...ctx.commands.values()].map(c => [c.name, c])).values()]
         .filter(c => Number(c.level) === level)
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -66,10 +95,41 @@ function sendCategory(ctx, level) {
     ctx.tellraw('@a', { text: '', extra: out });
 }
 
+function sendCategory(ctx, catName) {
+    const target = Object.keys(CATEGORIES).find(c => c.toLowerCase() === catName.toLowerCase()) || catName;
+    const all = [...new Map([...ctx.commands.values()].map(c => [c.name, c])).values()]
+        .filter(c => categoryOf(c) === target)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    const out = [];
+    out.push({ text: `${target} Commands`, color: '#55aaff', bold: true });
+    out.push({ text: ` (${all.length})\n`, color: 'dark_gray' });
+
+    all.forEach((cmd, i) => {
+        out.push({
+            text: cmd.name,
+            color: '#55aaff',
+            click_event: { action: 'suggest_command', command: `${PREFIX}help ${cmd.name}` },
+            hover_event: { action: 'show_text', value: { text: usageOf(cmd), color: 'white' } }
+        });
+        if (i < all.length - 1) out.push({ text: ' · ', color: 'dark_gray' });
+    });
+
+    out.push({ text: '\n\n', color: 'gray' });
+    out.push({
+        text: '← Back',
+        color: '#55aaff',
+        click_event: { action: 'suggest_command', command: `${PREFIX}dhelp` },
+        hover_event: { action: 'show_text', value: { text: 'Return to categories', color: 'green' } }
+    });
+
+    ctx.tellraw('@a', { text: '', extra: out });
+}
+
 module.exports = {
     name: 'dhelp',
-    description: 'Dynamic help with clickable categories',
-    usage: 'dhelp [public|trusted|admin|command]',
+    description: 'Dynamic help with clickable ranks and categories',
+    usage: 'dhelp [rank public|trusted|admin | cat <name> | command]',
     level: 0,
     aliases: ['dh'],
     async execute(ctx) {
@@ -80,26 +140,60 @@ module.exports = {
             return;
         }
 
-        const search = args[0].toLowerCase();
+        const first = args[0].toLowerCase();
 
-        const cmd = ctx.commands.get(search);
+        if (first === 'rank') {
+            const levelName = (args[1] || '').toLowerCase();
+            const level = Object.keys(LEVELS).find(n => LEVELS[n].name.toLowerCase() === levelName);
+            if (level === undefined) {
+                ctx.tellrawCommand('Unknown rank.');
+                return;
+            }
+            const userLevel = Number(ctx.level ?? 0);
+            if (userLevel < Number(level)) {
+                ctx.tellrawCommand('You do not have access to that rank.');
+                return;
+            }
+            sendRank(ctx, Number(level));
+            return;
+        }
+
+        if (first === 'cat' || first === 'category') {
+            const catName = (args[1] || '').toLowerCase();
+            const target = Object.keys(CATEGORIES).find(c => c.toLowerCase() === catName);
+            if (!target) {
+                ctx.tellrawCommand('Unknown category.');
+                return;
+            }
+            sendCategory(ctx, target);
+            return;
+        }
+
+        // direct rank name
+        const level = Object.keys(LEVELS).find(n => LEVELS[n].name.toLowerCase() === first);
+        if (level !== undefined) {
+            const userLevel = Number(ctx.level ?? 0);
+            if (userLevel < Number(level)) {
+                ctx.tellrawCommand('You do not have access to that rank.');
+                return;
+            }
+            sendRank(ctx, Number(level));
+            return;
+        }
+
+        // direct category name
+        const cat = Object.keys(CATEGORIES).find(c => c.toLowerCase() === first);
+        if (cat) {
+            sendCategory(ctx, cat);
+            return;
+        }
+
+        const cmd = ctx.commands.get(first);
         if (cmd) {
-            // delegate to help info if available
             ctx.tellrawCommand(`Use ${PREFIX}help ${cmd.name} for details.`);
             return;
         }
 
-        const level = Object.keys(LEVELS).find(n => LEVELS[n].name.toLowerCase() === search);
-        if (level !== undefined) {
-            const userLevel = Number(ctx.level ?? 0);
-            if (userLevel < Number(level)) {
-                ctx.tellrawCommand('You do not have access to that category.');
-                return;
-            }
-            sendCategory(ctx, Number(level));
-            return;
-        }
-
-        ctx.tellrawCommand(`Unknown category "${search}".`);
+        ctx.tellrawCommand(`Unknown "${first}".`);
     }
 };
