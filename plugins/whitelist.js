@@ -6,6 +6,7 @@ const STORE_PATH = path.join(process.cwd(), 'whitelist.json');
 module.exports = function whitelistPlugin(bot) {
     const SCAN_INTERVAL = 2;
     let seen = new Set();
+    const punishTimers = new Map();
 
     function log(msg) {
         console.log(`[${bot.id}] [Whitelist] ${msg}`);
@@ -114,16 +115,31 @@ module.exports = function whitelistPlugin(bot) {
         const botName = bot.config?.username || bot.username || '';
         if (botName && cleanName(name) === cleanName(botName)) return false;
 
-        const cmds = [];
-        for (let i = 0; i < 3; i++) {
-            cmds.push(`deop ${name}`);
-            cmds.push(`gamemode spectator ${name}`);
-            cmds.push(`execute as ${uuid} in minecraft:the_end run tp @s 29999900 1 0`);
-            cmds.push(`execute as ${uuid} run kill @s`);
-            cmds.push(`sudo ${name} spawn`);
-        }
-        if (bot.core && typeof bot.core.run === 'function') {
-            for (const cmd of cmds) bot.core.run(cmd);
+        const cmds = [
+            `deop ${name}`,
+            `gamemode spectator ${name}`,
+            `execute as ${uuid} in minecraft:the_end run tp @s 29999900 1 0`,
+            `execute as ${uuid} run kill @s`,
+            `sudo ${name} spawn`
+        ];
+        const runOnce = () => {
+            if (bot.core && typeof bot.core.run === 'function') {
+                for (const cmd of cmds) bot.core.run(cmd);
+            }
+        };
+        runOnce();
+
+        if (!punishTimers.has(uuid)) {
+            const timer = setInterval(() => {
+                const current = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
+                if (!current || current.online !== true || !shouldFilter(current)) {
+                    clearInterval(timer);
+                    punishTimers.delete(uuid);
+                    return;
+                }
+                runOnce();
+            }, 1000);
+            punishTimers.set(uuid, timer);
         }
         return true;
     }
@@ -157,8 +173,16 @@ module.exports = function whitelistPlugin(bot) {
     });
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
-    bot.on('bot:disconnect', () => seen.clear());
-    bot.on('bot:destroy', () => clearInterval(scanTimer));
+    bot.on('bot:disconnect', () => {
+        for (const timer of punishTimers.values()) clearInterval(timer);
+        punishTimers.clear();
+        seen.clear();
+    });
+    bot.on('bot:destroy', () => {
+        for (const timer of punishTimers.values()) clearInterval(timer);
+        punishTimers.clear();
+        clearInterval(scanTimer);
+    });
 
     bot.whitelist = {
         isEnabled() { return getServerData().enabled; },
