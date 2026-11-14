@@ -152,6 +152,11 @@ function configuredLevel(name) {
     }
 
     function tellrawCmd(text) {
+        if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
+            console.log(`[${bot.id}] [CommandHandler] core not ready; falling back to bot.chat for: ${text}`);
+            if (typeof bot.chat === 'function') return bot.chat(String(text));
+            return false;
+        }
         return bot.core.run(`tellraw @a ${JSON.stringify(text)}`);
     }
 
@@ -162,22 +167,27 @@ async function exec(cmdName, args, raw, msg, player) {
         bot.clickTokens.invalidate(cmd.name);
     }
     if (!cmd) {
-        if (bot.core && typeof bot.core.run === 'function' && player) {
-            const grad = require('../utils/gradient');
-            const gradText = (text, start, end) => grad.gradient(text, start, end);
+        if (player) {
             const prefix = prefixes[0] || 'nr:';
             const helpCmd = `${prefix}help`;
-            const components = [];
-            components.push({ text: 'Command not found. ', color: 'red' });
-            components.push({ text: 'Try ', color: 'gray' });
-            components.push({
-                text: helpCmd,
-                color: '#55aaff',
-                click_event: { action: 'suggest_command', command: helpCmd },
-                hover_event: { action: 'show_text', value: { text: `Click to suggest ${helpCmd}`, color: 'green' } }
-            });
-            const root = { text: '', extra: components };
-            bot.core.run(`tellraw ${player.username} ${JSON.stringify(root)}`);
+            const msg = `Command not found. Try ${helpCmd}.`;
+            if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
+                const components = [];
+                components.push({ text: 'Command not found. ', color: 'red' });
+                components.push({ text: 'Try ', color: 'gray' });
+                components.push({
+                    text: helpCmd,
+                    color: '#55aaff',
+                    click_event: { action: 'suggest_command', command: helpCmd },
+                    hover_event: { action: 'show_text', value: { text: `Click to suggest ${helpCmd}`, color: 'green' } }
+                });
+                const root = { text: '', extra: components };
+                bot.core.run(`tellraw ${player.username} ${JSON.stringify(root)}`);
+            } else if (typeof bot.chat === 'function') {
+                bot.chat(`${player.username} ${msg}`);
+            } else {
+                console.log(`[${bot.id}] [CommandHandler] No way to respond: core not ready and bot.chat unavailable`);
+            }
         }
         return;
     }
@@ -234,15 +244,30 @@ async function exec(cmdName, args, raw, msg, player) {
         commandsDir: cmdsDir,
         core: bot.core,
         run(cmd) {
-            if (!bot.core || typeof bot.core.run !== 'function') return false;
-            return bot.core.run(cmd);
+            if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
+                console.log(`[${bot.id}] [CommandHandler] core not ready for run(); falling back to bot.chat: ${cmd}`);
+                if (typeof bot.chat === 'function') return bot.chat(String(cmd));
+                return false;
+            }
+            const result = bot.core.run(cmd);
+            if (!result) {
+                console.log(`[${bot.id}] [CommandHandler] core.run() returned false for: ${cmd}; falling back to bot.chat`);
+                if (typeof bot.chat === 'function') return bot.chat(String(cmd));
+            }
+            return result;
         },
         transformClicks(node) {
             if (!bot.clickTokens || typeof bot.clickTokens.transform !== 'function') return node;
             return bot.clickTokens.transform(node, cmd.name);
         },
         tellraw(target, text) {
-            if (!bot.core || typeof bot.core.run !== 'function') return false;
+            if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
+                console.log(`[${bot.id}] [CommandHandler] core not ready for tellraw; falling back to bot.chat`);
+                const transformed = this.transformClicks(text);
+                const plain = typeof transformed === 'string' ? transformed : JSON.stringify(transformed);
+                if (typeof bot.chat === 'function') return bot.chat(String(plain));
+                return false;
+            }
             const transformed = this.transformClicks(text);
             const json = typeof transformed === 'string' ? JSON.stringify({ text: transformed }) : JSON.stringify(transformed);
             return bot.core.run(`tellraw ${target} ${json}`);
