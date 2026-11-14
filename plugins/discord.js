@@ -12,7 +12,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const CMD_DIR = path.join(process.cwd(), 'discordcommands');
+const CMD_DIR = path.join(process.cwd(), 'commands');
 
 const LEVELS = Object.freeze({ PUBLIC: 0, TRUSTED: 1, ADMIN: 2 });
 const RANK_NAMES = Object.freeze(['PUBLIC', 'TRUSTED', 'ADMIN']);
@@ -37,8 +37,8 @@ const RELAY = Object.freeze({
     maxRetries: 3
 });
 
-// Shared state. discordcommands/*.js read the global maps, so they stay
-// authoritative instead of being copied into each command module.
+// Shared state. commands/*.js (same as in-game commands) populate the
+// global maps so Discord and in-game share one command set.
 if (!global.discordClient) global.discordClient = null;
 if (!global.clientReady) global.clientReady = false;
 if (!global.channelMap) global.channelMap = new Map();
@@ -536,7 +536,6 @@ function loadCommands() {
         }
     }
 
-    log(`Loaded ${global.discordCommands.size} Discord command(s) from ${CMD_DIR}`);
 }
 
 let commandWatcher = null;
@@ -552,7 +551,7 @@ function startCommandWatcher() {
         commandWatcher = fs.watch(CMD_DIR, { persistent: true, recursive: false }, (eventType, filename) => {
             if (!filename || !filename.endsWith('.js')) return;
 
-            log(`Discord command file changed: ${filename} (${eventType}); reloading...`);
+            log(`Command file changed: ${filename} (${eventType}); reloading...`);
 
             // Debounce rapid changes
             if (commandWatcher._timeout) {
