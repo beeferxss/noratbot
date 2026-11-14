@@ -94,7 +94,7 @@
     "enabled": true,
     "survivorMaxAge": 60000,
     "area": {
-      "size": 64,
+      "size": 16,
       "y": 30
     },
 
