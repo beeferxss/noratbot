@@ -706,7 +706,7 @@ module.exports = function core(bot) {
             coreBlocks.clear();
             this.ready = false;
             this.origin = { x: null, y: Y, z: null };
-            this.bounds = { x: null, y: Y, z: null };
+            this.bounds = { x: null, y: Y + SIZE - 1, z: null };
             this.cursor = { x: null, y: Y, z: null };
             this._cursor = { x: null, y: Y, z: null };
         }
