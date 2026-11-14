@@ -159,6 +159,9 @@ function configuredLevel(name) {
 
 async function exec(cmdName, args, raw, msg, player) {
     const cmd = registry.get(String(cmdName).toLowerCase());
+    if (cmd && bot.clickTokens && typeof bot.clickTokens.invalidate === 'function') {
+        bot.clickTokens.invalidate(cmd.name);
+    }
     if (!cmd) {
         if (bot.core && typeof bot.core.run === 'function' && player) {
             const grad = require('../utils/gradient');

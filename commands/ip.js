@@ -227,19 +227,30 @@ module.exports = {
             const start = (page - 1) * pageSize;
             const pageIps = ips.slice(start, start + pageSize);
 
+            const source = (ctx.commandName || 'ip').toLowerCase();
             const nameComps = pageIps.map((ip, i) => {
                 const seen = ip.time
                     ? `Last used ${timeAgo(ip.time)} (${formatDate(ip.time)})`
                     : 'Last used: unknown';
                 const where = ip.server ? `\nServer: ${ip.server}` : '';
                 const label = ip.server ? `${ip.ip} [${ip.server}]` : ip.ip;
+                const hoverText = `Click to search alts of ${ip.ip}\n${seen}${where}`;
+
+                let clickEvent = { action: 'suggest_command', command: `${prefix}alts ${ip.ip}` };
+                if (bot.clickTokens && typeof bot.clickTokens.register === 'function') {
+                    const tokenCmd = bot.clickTokens.register(source, async (clickerName, clickerPlayer) => {
+                        await bot.commands.execute('alts', [ip.ip], `${prefix}alts ${ip.ip}`, ctx.message, clickerPlayer);
+                    });
+                    clickEvent = { action: 'run_command', command: tokenCmd };
+                }
+
                 return {
                     text: label + ' ',
                     color: (start + i) % 2 === 0 ? COLORS.primary : COLORS.secondary,
-                    click_event: { action: 'suggest_command', command: `${prefix}alts ${ip.ip}` },
+                    click_event: clickEvent,
                     hover_event: {
                         action: 'show_text',
-                        value: { text: `Click to search alts of ${ip.ip}\n${seen}${where}`, color: 'green' }
+                        value: { text: hoverText, color: 'green' }
                     }
                 };
             });
