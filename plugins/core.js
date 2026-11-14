@@ -24,9 +24,10 @@ module.exports = function core(bot) {
 
     const INITIAL_DELAY = Number.isFinite(Number(cfg.initialDelay)) ? Number(cfg.initialDelay) : 2000;
     const CHUNK_DELAY = Number.isFinite(Number(cfg.chunkChangeDelay)) ? Number(cfg.chunkChangeDelay) : 200;
-    const DAMAGE_DELAY = Number.isFinite(Number(cfg.damageDelay)) ? Number(cfg.damageDelay) : 50;
-    const REFILL_FINISH = Number.isFinite(Number(cfg.refillFinishDelay)) ? Number(cfg.refillFinishDelay) : 100;
-    const REFILL_COOLDOWN = Number.isFinite(Number(cfg.refillCooldown)) ? Number(cfg.refillCooldown) : 1;
+    const DAMAGE_DELAY = Number.isFinite(Number(cfg.damageDelay)) ? Number(cfg.damageDelay) : 1000;
+    const REFILL_FINISH = Number.isFinite(Number(cfg.refillFinishDelay)) ? Number(cfg.refillFinishDelay) : 2000;
+    const REFILL_COOLDOWN = Number.isFinite(Number(cfg.refillCooldown)) ? Number(cfg.refillCooldown) : 5000;
+    const GRACE_PERIOD = Number.isFinite(Number(cfg.gracePeriod)) ? Number(cfg.gracePeriod) : 8000;
     const OWN_CHANGE_TIME = Number.isFinite(Number(cfg.ownChangeDuration)) ? Number(cfg.ownChangeDuration) : 2500;
     const SURVIVOR_MAX_AGE = Number.isFinite(Number(cfg.survivorMaxAge)) ? Number(cfg.survivorMaxAge) : 60000;
 
@@ -78,6 +79,7 @@ module.exports = function core(bot) {
     let damagePending = false;
     let damageDuringRefill = false;
     let backupReady = false;
+    let graceUntil = 0;
     let initialTimer = null;
     let chunkTimer = null;
     let damageTimer = null;
@@ -202,6 +204,7 @@ module.exports = function core(bot) {
     async function refill(reason = 'damage') {
         damagePending = false;
         damageDuringRefill = false;
+        graceUntil = 0;
         // keep backupReady across refills
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
@@ -307,6 +310,7 @@ module.exports = function core(bot) {
             bot.core.ready = true;
             if (damageDuringRefill) { damageDuringRefill = false; damagePending = true; }
             cooldown = true;
+            graceUntil = Date.now() + GRACE_PERIOD;
             setTimeout(() => {
                 cooldown = false;
                 if (damagePending) {
@@ -322,6 +326,7 @@ module.exports = function core(bot) {
     const handlers = {
         onBlockChange(packet) {
             if (refilling) { damageDuringRefill = true; return; }
+            if (Date.now() < graceUntil) return;
             if (!packet?.location || !bot.core.ready) return;
             const x = packet.location.x;
             const y = packet.location.y;
@@ -339,6 +344,7 @@ module.exports = function core(bot) {
 
         onMapChunk(packet) {
             if (refilling) { damageDuringRefill = true; return; }
+            if (Date.now() < graceUntil) return;
             if (!packet || !bot.core.ready) return;
             const cx = packet.x;
             const cz = packet.z;
@@ -351,6 +357,7 @@ module.exports = function core(bot) {
                 chunk.load(packet.chunkData, packet.bitMap || 0);
 
                 let damaged = false;
+                let damagedCount = 0;
                 const originX = bot.core.origin.x;
                 const originY = bot.core.origin.y;
                 const originZ = bot.core.origin.z;
@@ -370,6 +377,7 @@ module.exports = function core(bot) {
                                     entry.alive = false;
                                     entry.verifiedAt = Date.now();
                                     damaged = true;
+                                    damagedCount++;
                                 } else {
                                     entry.alive = true;
                                     entry.verifiedAt = Date.now();
@@ -379,7 +387,7 @@ module.exports = function core(bot) {
                     }
                 }
 
-                if (damaged) {
+                if (damaged && damagedCount >= 4) {
                     clearTimeout(damageTimer);
                     damageTimer = setTimeout(() => {
                         if (!position || refilling) return;
@@ -394,6 +402,7 @@ module.exports = function core(bot) {
 
         onMultiBlockChange(packet) {
             if (refilling) { damageDuringRefill = true; return; }
+            if (Date.now() < graceUntil) return;
             if (!packet || !bot.core.ready) return;
             if (!Array.isArray(packet.records)) return;
             const coordinates = packet.chunkCoordinates;
@@ -627,6 +636,7 @@ module.exports = function core(bot) {
                 damagePending = false;
                 damageDuringRefill = false;
                 backupReady = false;
+                graceUntil = 0;
                 createCoreMap(false);
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
@@ -787,6 +797,7 @@ module.exports = function core(bot) {
             damagePending = false;
             damageDuringRefill = false;
             backupReady = false;
+            graceUntil = 0;
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
