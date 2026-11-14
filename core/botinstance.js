@@ -417,6 +417,18 @@ class BotInstance extends EventEmitter {
         }
     }
 
+    async rotateProxy() {
+        if (this.proxy && this.proxyPool) this.proxyPool.markFailed(this.proxy);
+        this.proxy = null;
+        this._proxyBootstrapTried = false;
+        await this.stop();
+        if (this.destroyed) return false;
+        this.started = false;
+        this._connecting = false;
+        this.start();
+        return true;
+    }
+
     async stop() {
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
