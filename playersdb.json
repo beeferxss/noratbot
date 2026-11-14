@@ -1,3 +1,40 @@
 {
-    "players": {}
+    "players": {
+        "691d95c8-9b65-3c28-969b-f50d2b35f1a8": {
+            "username": "7fbb6",
+            "lastSeenTime": 1794683014815,
+            "lastSeenServer": "qwertyad"
+        },
+        "7bbc5475-d55e-3fc7-b35b-59ec312c251d": {
+            "username": "HermitBot",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        },
+        "db70d366-a57f-3e24-863c-4f4f7b6a8333": {
+            "username": "vRAhfCoZSqAK",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        },
+        "61a6ad31-0a3d-3dab-a330-3726db32b0cf": {
+            "username": "NitoriBot",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        },
+        "2eb09099-978f-3547-a185-f9426d10091a": {
+            "username": "kj5ko2pen",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        },
+        "20bf5f33-8ffb-3090-86c4-e761d5bdb0ce": {
+            "username": "NitoriBotJava",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        },
+        "2f1d1bb9-7337-31d7-997f-acaa527152d9": {
+            "username": "VojtaV12",
+            "lastSeenTime": 1794683014816,
+            "lastSeenServer": "qwertyad"
+        }
+    },
+    "ips": {}
 }

@@ -1,1 +1,9 @@
-{}
+{
+    "qwertyad": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null
+    }
+}
