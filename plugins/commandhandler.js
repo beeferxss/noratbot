@@ -69,18 +69,18 @@ function configuredLevel(name) {
         if (typeof msg !== 'string') return null;
         const clean = msg.replace(/\x1b\[[0-9;]*m/g, '').trim();
         if (!clean) return null;
-        if (/^\[[^\]]+:[^\]]+\]\s*[^:]+:/.test(clean)) {
-            return null;
-        }
+
         let name = null;
         let cmdText = null;
 
-        let m = clean.match(/^\[[^\]]+\]\s*([^:]+):\s*(.*)$/s);
+        // Support common chat separators and leading rank brackets.
+        const stripped = clean.replace(/^(\[[^\]]+\]\s*)+/g, '').trim();
+        let m = stripped.match(/^<([^>]+)>\s*(.*)$/s);
         if (m) {
             name = m[1].trim();
             cmdText = m[2].trim();
         } else {
-            m = clean.match(/^([^:]+):\s*(.*)$/s);
+            m = stripped.match(/^([^:»›>]+?)\s*[:»›>]\s*(.*)$/s);
             if (m) {
                 name = m[1].trim();
                 cmdText = m[2].trim();
@@ -198,12 +198,14 @@ async function exec(cmdName, args, raw, msg, player) {
         uuid = chatBind.uuid;
 if (!uuid) {
     console.error(`[CommandHandler] No UUID for ${name}`);
+    if (bot.core?.ready) bot.core.run(`tellraw @a {"text":"[nr] cannot resolve UUID for ${name}","color":"red"}`);
     return;
 }
     } else {
         uuid = getUUID(name);
 if (!uuid) {
     console.error(`[CommandHandler] No UUID for ${name}`);
+    if (bot.core?.ready) bot.core.run(`tellraw @a {"text":"[nr] cannot resolve UUID for ${name}","color":"red"}`);
     return;
 }
     }
@@ -278,6 +280,7 @@ if (!uuid) {
         if (!clean) return;
 
         const player = extractPlayer(clean);
+        if (logSettings.commands !== false) console.log(`[${bot.id}] [CommandHandler] chat_plain candidate: ${clean} -> ${player ? player.username + ' :: ' + player.commandText : 'null'}`);
         if (!player) return;
 
         const cmdText = player.commandText;

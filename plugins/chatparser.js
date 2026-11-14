@@ -283,7 +283,8 @@ function write(bot, v) {
         const senderName = typeof parsed.sender === 'string' ? parsed.sender : parsed.sender?.username || 'Unknown';
         plainForCommands = `${senderName}: ${parsed.contents}`;
     } else {
-        const match = displayText.match(/^<([^>]+)>\s*(.*)/);
+        const strippedDisplay = displayText.replace(/^(\[[^\]]+\]\s*)+/g, '').trim();
+        const match = strippedDisplay.match(/^<([^>]+)>\s*(.*)/);
         if (match) {
             const senderName = match[1].trim();
             const contents = match[2].trim();
@@ -291,7 +292,7 @@ function write(bot, v) {
                 plainForCommands = `${senderName}: ${contents}`;
             }
         } else {
-            const match2 = displayText.match(/^([^:]+):\s*(.*)/);
+            const match2 = strippedDisplay.match(/^([^:»›>]+)[:»›>]\s*(.*)/);
             if (match2) {
                 const senderName = match2[1].trim();
                 const contents = match2[2].trim();
@@ -305,6 +306,7 @@ function write(bot, v) {
     process.stdout.write(`[${bot.id}] ` + result + RESET + '\n');
     bot.emit('chat_display', displayText);
     bot.emit('chat_display_ansi', result);
+    if (bot.globalConfig?.logging?.commands !== false) console.log(`[${bot.id}] [ChatParser] plainForCommands: ${plainForCommands}`);
     bot.emit('chat_plain', plainForCommands);
 }
 module.exports = function chatParser(bot) {
