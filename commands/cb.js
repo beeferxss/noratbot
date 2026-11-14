@@ -10,7 +10,7 @@ module.exports = {
             if (!core) return ctx.tellrawCommand('Core is not loaded.');
             if (!core.ready) return ctx.tellrawCommand('Core is not ready.');
 
-            const info = `Core origin: ${core.origin.x}, ${core.origin.y}, ${core.origin.z} | bounds: ${core.bounds.x}, ${core.bounds.y}, ${core.bounds.z} | ready: ${core.ready}`;
+            const info = `core ${core.origin.x},${core.origin.y},${core.origin.z} to ${core.bounds.x},${core.bounds.y},${core.bounds.z} ready:${core.ready}`;
             let button = { text: '' };
             if (ctx.bot.clickTokens?.register) {
                 const token = ctx.bot.clickTokens.register('cb', async (clicker) => {
@@ -18,10 +18,10 @@ module.exports = {
                     core.run(`tp ${clicker} ${core.origin.x} ${core.origin.y} ${core.origin.z}`);
                 });
                 button = {
-                    text: '[TP to core]',
+                    text: '[tp to core]',
                     color: '#55aaff',
                     click_event: { action: 'run_command', command: token },
-                    hover_event: { action: 'show_text', value: { text: 'Teleport to the core', color: 'green' } }
+                    hover_event: { action: 'show_text',                        value: { text: 'tp to core', color: 'green' } }
                 };
             }
             return ctx.tellraw('@a', { text: '', extra: [{ text: info + ' ' }, button] });
