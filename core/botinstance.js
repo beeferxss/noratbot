@@ -197,26 +197,12 @@ class BotInstance extends EventEmitter {
 
         if (!this.proxyPool) return null;
 
-        const destination = await this.resolveDestination(this.config.host, Number(this.config.port));
+        if (this.proxy) return this.proxy;
 
-        if (this.proxy) {
-            if (await this.probeProxy(this.proxy, destination)) return this.proxy;
-            this.proxyPool.markFailed(this.proxy);
-            this.proxy = null;
-        }
-
-        const maxAttempts = 5;
-        for (let i = 0; i < maxAttempts; i++) {
-            const candidate = this.proxyPool.pick();
-            if (!candidate) break;
-            if (await this.probeProxy(candidate, destination)) {
-                this.proxy = candidate;
-                this.proxyPool.markGood(candidate);
-                return candidate;
-            }
-            this.proxyPool.markFailed(candidate);
-        }
-        return null;
+        const candidate = this.proxyPool.pick();
+        if (!candidate) return null;
+        this.proxy = candidate;
+        return candidate;
     }
 
     async probeProxy(proxy, destination) {

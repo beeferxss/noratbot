@@ -159,9 +159,7 @@ class ProxyPool {
         }
         const usable = this.list.filter(p => !this.failed.has(keyOf(p)));
         if (!usable.length) return null;
-        const knownGood = usable.filter(p => this.good.has(keyOf(p)));
-        const pool = knownGood.length && Math.random() < 0.7 ? knownGood : usable;
-        return pool[Math.floor(Math.random() * pool.length)];
+        return usable[Math.floor(Math.random() * usable.length)];
     }
 
     markFailed(proxy) {
