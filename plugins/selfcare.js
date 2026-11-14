@@ -155,7 +155,8 @@ module.exports = function selfcare(bot) {
         if (vanishReq) return;
 
         vanishReq = true;
-        executeWithCore(`vanish ${bot.client.username} enable`).then(success => {
+        const botName = bot.config?.username || bot.username;
+        executeWithCore(`vanish ${botName} enable`).then(success => {
             vanishReq = false;
             if (success) {
                 vanished = true;
