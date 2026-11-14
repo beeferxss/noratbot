@@ -405,7 +405,7 @@ module.exports = function core(bot) {
     bot.on('position', handlers.onPosition);
     bot.on('end', handlers.onEnd);
 
-    // ---- tracked output: query the command block's LastOutput via nbt query ----
+    // query command block LastOutput through nbt
     const nbtQueries = new Map();
     let nbtTransactionId = 1;
 
@@ -419,8 +419,7 @@ module.exports = function core(bot) {
         return undefined;
     }
 
-    // typed nbt ({type, value}) -> plain js. 1.21.5+ stores LastOutput as a text component
-    // compound instead of a JSON string, so this has to cope with both
+    // convert typed nbt to plain js; 1.21.5+ stores LastOutput as a text component
     function simplifyNbt(node) {
         if (node === null || typeof node !== 'object') return node;
         if (Array.isArray(node)) return node.map(simplifyNbt);
@@ -457,7 +456,7 @@ module.exports = function core(bot) {
             const args = c.with || c.args;
             if (Array.isArray(args)) out += ' ' + args.map(flattenComponent).join(' ');
         }
-        // nbt text components wrap bare strings inside mixed lists as { "": "text" }
+        // text components wrap bare strings as { "": "text" }
         if (c[''] !== undefined) out += flattenComponent(c['']);
         if (c.extra) out += flattenComponent(c.extra);
         return out;
@@ -478,8 +477,7 @@ module.exports = function core(bot) {
         let text = flattenComponent(raw);
         if (bot.core) bot.core._lastRaw = JSON.stringify(raw);
 
-        // safety net: the label is there but the address got lost in an odd component shape,
-        // so pull the first ip-looking thing out of the raw structure
+        // fallback: grab the first ip-looking value from the raw nbt
         if (/IP Address:/.test(text) && !/IP Address:\s*\/?\S/.test(text)) {
             const ip = JSON.stringify(raw).match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
             if (ip) text = text.replace(/IP Address:\s*$/, `IP Address: /${ip[0]}`);
@@ -493,11 +491,11 @@ module.exports = function core(bot) {
         if (!pending) return;
         nbtQueries.delete(packet.transactionId);
         clearTimeout(pending.timer);
-        bot.core._lastNbt = packet.nbt; // kept for debugging (iptest shows it)
+        bot.core._lastNbt = packet.nbt;
         pending.resolve(parseLastOutput(packet.nbt));
     }
 
-    // work out the real packet names for this protocol version instead of assuming them
+    // resolve packet names for this protocol version
     function detectPacketNames() {
         const result = { server: null, client: null, matchesServer: [], matchesClient: [] };
         try {
@@ -532,8 +530,7 @@ module.exports = function core(bot) {
 
     bot.on(QUERY_C, onNbtQueryResponse);
 
-    // also listen on the raw client: any packet that looks like a query reply and carries a
-    // transactionId we are waiting for counts, whatever the bot wrapper or protocol calls it
+    // also catch query replies on the raw client by transactionId
     function onAnyPacket(data, meta) {
         const name = meta && meta.name;
         if (!name || !/nbt|query/i.test(name) || !data || data.transactionId === undefined) return;
@@ -650,13 +647,12 @@ module.exports = function core(bot) {
 
         _nbtPackets: nbtPackets,
 
-        // runs the command and resolves with the command block's output as plain text
-        // (or null if it couldn't be run / no output was received). needs op for the nbt query
+        // run command block and return its output, or null
         runTracked(command, { delay = 150, timeout = 3000 } = {}) {
             this._lastLocation = null;
             const ok = this.run(command);
             const location = this._lastLocation;
-            this._lastRunOk = !!(ok && location); // false = never ran (core not ready / out of blocks)
+            this._lastRunOk = !!(ok && location);
             if (!ok || !location) return Promise.resolve(null);
 
             return new Promise(resolve => {

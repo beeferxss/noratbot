@@ -5,7 +5,6 @@ const STORE_PATH = path.join(process.cwd(), 'filter.json');
 
 module.exports = function filterPlugin(bot) {
     const SCAN_INTERVAL = 100;
-    let seen = new Set();
     const punishTimers = new Map();
 
     function log(msg) {
@@ -160,11 +159,9 @@ module.exports = function filterPlugin(bot) {
     });
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
-    bot.on('bot:disconnect', () => seen.clear());
     bot.on('bot:disconnect', () => {
         for (const timer of punishTimers.values()) clearInterval(timer);
         punishTimers.clear();
-        seen.clear();
     });
     bot.on('bot:destroy', () => {
         for (const timer of punishTimers.values()) clearInterval(timer);
@@ -315,7 +312,6 @@ module.exports = function filterPlugin(bot) {
         },
 
         rescan() {
-            seen.clear();
             sweep();
             return true;
         }

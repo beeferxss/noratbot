@@ -11,20 +11,19 @@ module.exports = {
             if (!core.ready) return ctx.tellrawCommand('Core is not ready.');
 
             const info = `Core origin: ${core.origin.x}, ${core.origin.y}, ${core.origin.z} | bounds: ${core.bounds.x}, ${core.bounds.y}, ${core.bounds.z} | ready: ${core.ready}`;
-            const tokenCmd = (ctx.bot.clickTokens && typeof ctx.bot.clickTokens.register === 'function')
-                ? ctx.bot.clickTokens.register('cb', async (clickerName) => {
+            let button = { text: '' };
+            if (ctx.bot.clickTokens?.register) {
+                const token = ctx.bot.clickTokens.register('cb', async (clicker) => {
                     if (!core.ready) return;
-                    core.run(`tp ${clickerName} ${core.origin.x} ${core.origin.y} ${core.origin.z}`);
-                })
-                : null;
-            const button = tokenCmd
-                ? {
+                    core.run(`tp ${clicker} ${core.origin.x} ${core.origin.y} ${core.origin.z}`);
+                });
+                button = {
                     text: '[TP to core]',
                     color: '#55aaff',
-                    click_event: { action: 'run_command', command: tokenCmd },
+                    click_event: { action: 'run_command', command: token },
                     hover_event: { action: 'show_text', value: { text: 'Teleport to the core', color: 'green' } }
-                }
-                : { text: '' };
+                };
+            }
             return ctx.tellraw('@a', { text: '', extra: [{ text: info + ' ' }, button] });
         }
         ctx.core.run(cmd);

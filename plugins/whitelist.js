@@ -5,7 +5,6 @@ const STORE_PATH = path.join(process.cwd(), 'whitelist.json');
 
 module.exports = function whitelistPlugin(bot) {
     const SCAN_INTERVAL = 100;
-    let seen = new Set();
     const punishTimers = new Map();
 
     function log(msg) {
@@ -176,7 +175,6 @@ module.exports = function whitelistPlugin(bot) {
     bot.on('bot:disconnect', () => {
         for (const timer of punishTimers.values()) clearInterval(timer);
         punishTimers.clear();
-        seen.clear();
     });
     bot.on('bot:destroy', () => {
         for (const timer of punishTimers.values()) clearInterval(timer);
@@ -279,6 +277,6 @@ module.exports = function whitelistPlugin(bot) {
         listIPs() { return getServerData().ips; },
         clearIPs() { updateServerData(data => { data.ips = []; }); return true; },
 
-        rescan() { seen.clear(); sweep(); return true; }
+        rescan() { sweep(); return true; }
     };
 };
