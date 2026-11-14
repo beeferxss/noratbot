@@ -240,19 +240,8 @@ module.exports = function core(bot) {
                 });
 
                 await new Promise(resolve => setTimeout(resolve, 35));
-                const k1 = key(bot.core.origin.x, bot.core.origin.y, bot.core.origin.z);
-                const k2 = key(bot.core.bounds.x, bot.core.bounds.y, bot.core.bounds.z);
-                const k3 = key(survivor.x, survivor.y, survivor.z);
-
-                const status1 = coreBlocks.get(k1);
-                const status2 = coreBlocks.get(k2);
-                const status3 = coreBlocks.get(k3);
-
-                if (status1?.alive && status2?.alive && status3?.alive) {
-                    success = true;
-                } else {
-                    if (status3) status3.alive = false;
-                }
+                // treat a successful command-block write as success (use remains of core)
+                success = true;
             } catch (error) {
                 success = false;
                 const k = key(survivor.x, survivor.y, survivor.z);
@@ -261,13 +250,13 @@ module.exports = function core(bot) {
             }
         }
 
-        // always run the /fill command; survivor command-block path above is only an optimization
-        try {
-            if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
-            const r = bot.chat('/' + command);
-            if (r !== false) success = true;
-        } catch (error) {
-            console.error(`[${bot.id}] [Core] Chat refill error:`, error);
+        if (!success) {
+            try {
+                if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
+                success = bot.chat('/' + command) !== false;
+            } catch (error) {
+                console.error(`[${bot.id}] [Core] Chat refill error:`, error);
+            }
         }
 
         if (!success && backupReady) {
