@@ -28,7 +28,7 @@ module.exports = function core(bot) {
         bot.core = {
             ready: false,
             origin: { x: null, y: Y, z: null },
-            bounds: { x: null, y: Y, z: null },
+            bounds: { x: null, y: Y + SIZE - 1, z: null },
             cursor: { x: null, y: Y, z: null },
             reset() { return false; },
             refill() { return false; },
@@ -76,7 +76,7 @@ module.exports = function core(bot) {
 
     const coreBlocks = new Map();
     const ownChanges = new Map();
-    const MAX_OWN_CHANGES = 300;
+    const MAX_OWN_CHANGES = Math.max(300, SIZE * SIZE * SIZE);
 
     function log(message) {
         console.log(`[${bot.id}] [Core] ${message}`);
@@ -87,7 +87,7 @@ module.exports = function core(bot) {
     function inside(x, y, z) {
         return bot.core.origin.x !== null &&
             x >= bot.core.origin.x && x <= bot.core.bounds.x &&
-            y === Y &&
+            y >= bot.core.origin.y && y <= bot.core.bounds.y &&
             z >= bot.core.origin.z && z <= bot.core.bounds.z;
     }
 
@@ -125,11 +125,13 @@ module.exports = function core(bot) {
         if (bot.core.origin.x === null) return;
         const now = initialAlive ? Date.now() : 0;
         for (let x = bot.core.origin.x; x <= bot.core.bounds.x; x++) {
-            for (let z = bot.core.origin.z; z <= bot.core.bounds.z; z++) {
-                coreBlocks.set(key(x, Y, z), {
-                    alive: initialAlive,
-                    verifiedAt: now
-                });
+            for (let y = bot.core.origin.y; y <= bot.core.bounds.y; y++) {
+                for (let z = bot.core.origin.z; z <= bot.core.bounds.z; z++) {
+                    coreBlocks.set(key(x, y, z), {
+                        alive: initialAlive,
+                        verifiedAt: now
+                    });
+                }
             }
         }
     }
@@ -196,7 +198,7 @@ module.exports = function core(bot) {
         bot.core.ready = false;
         cleanupOwn();
 
-        const command = `fill ${bot.core.origin.x} ${Y} ${bot.core.origin.z} ${bot.core.bounds.x} ${Y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
+        const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
         let success = false;
 
         const survivor = getRecentlyVerifiedSurvivor();
@@ -213,8 +215,8 @@ module.exports = function core(bot) {
                 });
 
                 await new Promise(resolve => setTimeout(resolve, 35));
-                const k1 = key(bot.core.origin.x, Y, bot.core.origin.z);
-                const k2 = key(bot.core.bounds.x, Y, bot.core.bounds.z);
+                const k1 = key(bot.core.origin.x, bot.core.origin.y, bot.core.origin.z);
+                const k2 = key(bot.core.bounds.x, bot.core.bounds.y, bot.core.bounds.z);
                 const k3 = key(survivor.x, survivor.y, survivor.z);
 
                 const status1 = coreBlocks.get(k1);
@@ -253,8 +255,8 @@ module.exports = function core(bot) {
             entry.verifiedAt = Date.now();
         }
 
-        bot.core.cursor = { x: bot.core.origin.x, y: Y, z: bot.core.origin.z };
-        bot.core._cursor = { x: bot.core.origin.x, y: Y, z: bot.core.origin.z };
+        bot.core.cursor = { x: bot.core.origin.x, y: bot.core.origin.y, z: bot.core.origin.z };
+        bot.core._cursor = { x: bot.core.origin.x, y: bot.core.origin.y, z: bot.core.origin.z };
 
         if (finishTimer) clearTimeout(finishTimer);
         finishTimer = setTimeout(() => {
@@ -299,24 +301,28 @@ module.exports = function core(bot) {
 
                 let damaged = false;
                 const originX = bot.core.origin.x;
+                const originY = bot.core.origin.y;
                 const originZ = bot.core.origin.z;
                 const boundsX = bot.core.bounds.x;
+                const boundsY = bot.core.bounds.y;
                 const boundsZ = bot.core.bounds.z;
 
                 for (let x = originX; x <= boundsX; x++) {
-                    for (let z = originZ; z <= boundsZ; z++) {
-                        const block = chunk.getBlock({ x: x & 15, y: Y, z: z & 15 });
-                        const isRepeating = block && block.name && block.name.includes('repeating_command_block');
-                        const keyStr = key(x, Y, z);
-                        const entry = coreBlocks.get(keyStr);
-                        if (entry) {
-                            if (!isRepeating) {
-                                entry.alive = false;
-                                entry.verifiedAt = Date.now();
-                                damaged = true;
-                            } else {
-                                entry.alive = true;
-                                entry.verifiedAt = Date.now();
+                    for (let y = originY; y <= boundsY; y++) {
+                        for (let z = originZ; z <= boundsZ; z++) {
+                            const block = chunk.getBlock({ x: x & 15, y, z: z & 15 });
+                            const isRepeating = block && block.name && block.name.includes('repeating_command_block');
+                            const keyStr = key(x, y, z);
+                            const entry = coreBlocks.get(keyStr);
+                            if (entry) {
+                                if (!isRepeating) {
+                                    entry.alive = false;
+                                    entry.verifiedAt = Date.now();
+                                    damaged = true;
+                                } else {
+                                    entry.alive = true;
+                                    entry.verifiedAt = Date.now();
+                                }
                             }
                         }
                     }
@@ -539,7 +545,7 @@ module.exports = function core(bot) {
     bot.core = {
         ready: false,
         origin: { x: null, y: Y, z: null },
-        bounds: { x: null, y: Y, z: null },
+        bounds: { x: null, y: Y + SIZE - 1, z: null },
         cursor: { x: null, y: Y, z: null },
         _cursor: { x: null, y: Y, z: null },
 
@@ -550,7 +556,7 @@ module.exports = function core(bot) {
             const x = cx * SIZE;
             const z = cz * SIZE;
             this.origin = { x, y: Y, z };
-            this.bounds = { x: x + SIZE - 1, y: Y, z: z + SIZE - 1 };
+            this.bounds = { x: x + SIZE - 1, y: Y + SIZE - 1, z: z + SIZE - 1 };
             this.cursor = { ...this.origin };
             this._cursor = { ...this.origin };
             chunkX = cx;
@@ -562,21 +568,18 @@ module.exports = function core(bot) {
         },
 
         _getNextBlock() {
-            let x = this._cursor.x;
-            let z = this._cursor.z;
-            if (x === null || z === null) {
-                x = this.origin.x;
-                z = this.origin.z;
-            }
-            const totalBlocks = (this.bounds.x - this.origin.x + 1) * (this.bounds.z - this.origin.z + 1);
-            for (let offset = 0; offset < totalBlocks; offset++) {
-                const bx = this.origin.x + ((x - this.origin.x + offset) % (this.bounds.x - this.origin.x + 1));
-                const bz = this.origin.z + ((z - this.origin.z + offset) % (this.bounds.z - this.origin.z + 1));
-                const keyStr = key(bx, Y, bz);
-                const entry = coreBlocks.get(keyStr);
-                if (entry && entry.alive) {
-                    this._cursor = { x: bx, y: Y, z: bz };
-                    return { x: bx, y: Y, z: bz };
+            const ox = this.origin.x, oy = this.origin.y, oz = this.origin.z;
+            const bx = this.bounds.x, by = this.bounds.y, bz = this.bounds.z;
+            for (let x = ox; x <= bx; x++) {
+                for (let y = oy; y <= by; y++) {
+                    for (let z = oz; z <= bz; z++) {
+                        const keyStr = key(x, y, z);
+                        const entry = coreBlocks.get(keyStr);
+                        if (entry && entry.alive) {
+                            this._cursor = { x, y, z };
+                            return { x, y, z };
+                        }
+                    }
                 }
             }
             return null;
@@ -584,16 +587,21 @@ module.exports = function core(bot) {
 
         _advanceCursor() {
             let x = this._cursor.x;
+            let y = this._cursor.y;
             let z = this._cursor.z;
             x++;
             if (x > this.bounds.x) {
                 x = this.origin.x;
-                z++;
-                if (z > this.bounds.z) {
-                    z = this.origin.z;
+                y++;
+                if (y > this.bounds.y) {
+                    y = this.origin.y;
+                    z++;
+                    if (z > this.bounds.z) {
+                        z = this.origin.z;
+                    }
                 }
             }
-            this._cursor = { x, y: Y, z };
+            this._cursor = { x, y, z };
         },
 
         refill,
