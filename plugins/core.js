@@ -77,6 +77,7 @@ module.exports = function core(bot) {
     let cooldown = false;
     let damagePending = false;
     let damageDuringRefill = false;
+    let backupReady = false;
     let initialTimer = null;
     let chunkTimer = null;
     let damageTimer = null;
@@ -201,6 +202,7 @@ module.exports = function core(bot) {
     async function refill(reason = 'damage') {
         damagePending = false;
         damageDuringRefill = false;
+        // keep backupReady across refills
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
         if (refilling) return false;
@@ -258,9 +260,36 @@ module.exports = function core(bot) {
             }
         }
 
+        if (!success && backupReady) {
+            try {
+                const bx = bot.core.origin.x + 1000;
+                const by = bot.core.origin.y;
+                const bz = bot.core.origin.z + 1000;
+                const cloneCmd = `clone ${bx} ${by} ${bz} ${bx + SIZE - 1} ${by + SIZE - 1} ${bz + SIZE - 1} ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} replace`;
+                success = bot.chat('/' + cloneCmd) !== false;
+            } catch (error) {
+                console.error(`[${bot.id}] [Core] Clone fallback error:`, error);
+                success = false;
+            }
+        }
+
         if (!success) {
             refilling = false;
             return false;
+        }
+
+        // Create a backup copy for future clone restores.
+        if (!backupReady) {
+            try {
+                const bx = bot.core.origin.x + 1000;
+                const by = bot.core.origin.y;
+                const bz = bot.core.origin.z + 1000;
+                const cloneCmd = `clone ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${bx} ${by} ${bz} replace`;
+                bot.chat('/' + cloneCmd);
+                backupReady = true;
+            } catch (error) {
+                // ignore backup failures
+            }
         }
 
         for (const entry of coreBlocks.values()) {
@@ -597,6 +626,7 @@ module.exports = function core(bot) {
                 ownChanges.clear();
                 damagePending = false;
                 damageDuringRefill = false;
+                backupReady = false;
                 createCoreMap(false);
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
@@ -756,6 +786,7 @@ module.exports = function core(bot) {
             ownChanges.clear();
             damagePending = false;
             damageDuringRefill = false;
+            backupReady = false;
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
