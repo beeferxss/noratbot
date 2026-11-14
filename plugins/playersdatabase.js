@@ -77,7 +77,16 @@ module.exports = function playersDatabase(bot) {
     function setIP(uuid, ip, serverId = server, time = Date.now()) {
         if (!uuid || !ip) return false;
         ip = String(ip).trim();
-        (data.ips[serverId] ||= {})[uuid] = ip;
+        const ips = (data.ips[serverId] ||= {});
+        const previous = ips[uuid];
+        if (previous && previous !== ip) {
+            const info = data.players[uuid];
+            if (info) {
+                if (!info.ips || typeof info.ips !== 'object' || Array.isArray(info.ips)) info.ips = {};
+                if (!info.ips[previous]) info.ips[previous] = time; // keep prior IP in history
+            }
+        }
+        ips[uuid] = ip;
         const info = data.players[uuid];
         if (info) {
             if (!info.ips || typeof info.ips !== 'object' || Array.isArray(info.ips)) info.ips = {};
