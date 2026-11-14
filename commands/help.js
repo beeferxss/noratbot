@@ -78,7 +78,7 @@ function sendInfo(ctx, cmd) {
         hover_event: { action: 'show_text', value: { text: `Suggest ${suggest}`, color: 'green' } }
     });
 
-    ctx.tellraw('@a', { text: '', extra: out });
+    ctx.run(`tellraw @a ${toSNBT({ text: '', extra: out })}`);
 }
 
 function sendList(ctx, onlyLevel) {
@@ -123,7 +123,7 @@ function sendList(ctx, onlyLevel) {
 
     out.push({ text: `\nHover for usage. ${PREFIX}help <command> for details`, color: 'dark_gray' });
 
-    ctx.tellraw('@a', { text: '', extra: out });
+    ctx.run(`tellraw @a ${toSNBT({ text: '', extra: out })}`);
 }
 
 module.exports = {
