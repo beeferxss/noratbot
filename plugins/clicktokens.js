@@ -2,8 +2,8 @@ const RANGE_MAX = 3420556;
 const TOKEN_TTL_MS = 3 * 60 * 1000;
 
 module.exports = function clickTokensPlugin(bot) {
-    const tokens = new Map(); // token command string -> { source, action }
-    const bySource = new Map(); // source command -> Set(token command string)
+    const tokens = new Map();
+    const bySource = new Map();
 
     function makeToken() {
         let token;
@@ -17,7 +17,6 @@ module.exports = function clickTokensPlugin(bot) {
 
     function register(source, action) {
         const src = String(source || 'unknown').toLowerCase();
-        // prune expired tokens first
         const now = Date.now();
         for (const [cmd, entry] of tokens) {
             if (now - (entry.createdAt || 0) > TOKEN_TTL_MS) {
@@ -70,26 +69,22 @@ module.exports = function clickTokensPlugin(bot) {
         const tokenCmd = `/random value ${m[1]}..${m[2]}`;
 
         let player = null;
-        // common cspy/chat formats
-        let pm = clean.match(/issued server command:\s*\/random/i);
-        if (pm) {
-            const nameMatch = clean.match(/^([A-Za-z0-9_]+)\s+issued server command:/i);
-            if (nameMatch) player = nameMatch[1];
-        }
-        if (!player) {
-            pm = clean.match(/^\[([^\]]+)\]\s*\/random/i);
-            if (pm) player = pm[1].trim();
-        }
-        if (!player) {
-            pm = clean.match(/^([^:]+):\s*\/random/i);
-            if (pm) player = pm[1].trim();
-        }
-        if (!player) {
-            // fallback: any username-like token immediately before /random
-            pm = clean.match(/([A-Za-z0-9_]{2,16})[^\n]*\/random\s+value/i);
-            if (pm) player = pm[1];
+        const patterns = [
+            /^([A-Za-z0-9_]+)\s+issued server command:/i,
+            /^\[([^\]]+)\]\s*\/random/i,
+            /^([^:\[\]]+):\s*\/random/i,
+            /([A-Za-z0-9_]{2,16})[^\n]*issued server command:[^\n]*\/random/i,
+            /([A-Za-z0-9_]{2,16})[^\n]*\/random\s+value/i,
+        ];
+        for (const re of patterns) {
+            const pm = clean.match(re);
+            if (pm && pm[1]) { player = pm[1].trim(); break; }
         }
         if (player) player = player.replace(/^\.+/, '').trim();
+        if (!player) {
+            const pm = clean.match(/([A-Za-z0-9_]{2,16})/);
+            if (pm) player = pm[1];
+        }
 
         console.log(`[${bot.id}] [ClickTokens] parsed chat="${clean}" player="${player}" token="${tokenCmd}"`);
         return { player, tokenCmd };
