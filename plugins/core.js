@@ -38,7 +38,7 @@ module.exports = function core(bot) {
             bounds: { x: null, y: Y + SIZE - 1, z: null },
             cursor: { x: null, y: Y, z: null },
             reset() { return false; },
-            refill() { return false; },
+            refill(reason, force) { return false; },
             run() { return false; },
             runTracked() { return Promise.resolve(null); },
             destroy() { this.ready = false; }
@@ -201,15 +201,16 @@ module.exports = function core(bot) {
         }, DAMAGE_DELAY);
     }
 
-    async function refill(reason = 'damage') {
+    async function refill(reason = 'damage', force = false) {
         damagePending = false;
         damageDuringRefill = false;
         graceUntil = 0;
+        if (force) { cooldown = false; refilling = false; }
         // keep backupReady across refills
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
-        if (refilling) return false;
-        if (cooldown) return false;
+        if (refilling && !force) return false;
+        if (cooldown && !force) return false;
         if (bot.core.origin.x === null && !bot.core.reset()) return false;
 
         refilling = true;
@@ -220,7 +221,7 @@ module.exports = function core(bot) {
         let success = false;
 
         const survivor = getRecentlyVerifiedSurvivor();
-        if (survivor) {
+        if (survivor && !force) {
             try {
                 markOwn(survivor.x, survivor.y, survivor.z);
                 if (typeof bot.write !== 'function') throw new Error('bot.write unavailable');

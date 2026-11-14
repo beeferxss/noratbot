@@ -4,6 +4,6 @@ module.exports = {
     level: 0,
 
     async execute(ctx) {
-        ctx.bot.core.refill('initial');
+        ctx.bot.core.refill('manual', true);
     }
 };
