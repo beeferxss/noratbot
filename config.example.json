@@ -30,7 +30,7 @@
       },
       {
         "id": "hceboom",
-        "enabled": false,
+        "enabled": true,
         "host": "kaboom.hcesaropz.dev",
         "port": 25565,
         "version": "26.1",
