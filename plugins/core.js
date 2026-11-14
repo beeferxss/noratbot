@@ -76,6 +76,7 @@ module.exports = function core(bot) {
     let refilling = false;
     let cooldown = false;
     let damagePending = false;
+    let damageDuringRefill = false;
     let initialTimer = null;
     let chunkTimer = null;
     let damageTimer = null;
@@ -199,6 +200,7 @@ module.exports = function core(bot) {
 
     async function refill(reason = 'damage') {
         damagePending = false;
+        damageDuringRefill = false;
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
         if (refilling) return false;
@@ -274,6 +276,7 @@ module.exports = function core(bot) {
             finishTimer = null;
             refilling = false;
             bot.core.ready = true;
+            if (damageDuringRefill) { damageDuringRefill = false; damagePending = true; }
             cooldown = true;
             setTimeout(() => {
                 cooldown = false;
@@ -289,7 +292,8 @@ module.exports = function core(bot) {
 
     const handlers = {
         onBlockChange(packet) {
-            if (!packet?.location || !bot.core.ready || refilling) return;
+            if (refilling) { damageDuringRefill = true; return; }
+            if (!packet?.location || !bot.core.ready) return;
             const x = packet.location.x;
             const y = packet.location.y;
             const z = packet.location.z;
@@ -305,7 +309,8 @@ module.exports = function core(bot) {
         },
 
         onMapChunk(packet) {
-            if (!packet || !bot.core.ready || refilling) return;
+            if (refilling) { damageDuringRefill = true; return; }
+            if (!packet || !bot.core.ready) return;
             const cx = packet.x;
             const cz = packet.z;
             if (cx !== chunkX || cz !== chunkZ) return;
@@ -348,7 +353,8 @@ module.exports = function core(bot) {
                 if (damaged) {
                     clearTimeout(damageTimer);
                     damageTimer = setTimeout(() => {
-                        if (!position || refilling || cooldown) return;
+                        if (!position || refilling) return;
+                        if (cooldown) { damagePending = true; return; }
                         bot.core.refill('map_chunk_damage');
                     }, DAMAGE_DELAY);
                 }
@@ -358,7 +364,8 @@ module.exports = function core(bot) {
         },
 
         onMultiBlockChange(packet) {
-            if (!packet || !bot.core.ready || refilling) return;
+            if (refilling) { damageDuringRefill = true; return; }
+            if (!packet || !bot.core.ready) return;
             if (!Array.isArray(packet.records)) return;
             const coordinates = packet.chunkCoordinates;
             if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') return;
@@ -589,6 +596,7 @@ module.exports = function core(bot) {
                 this.ready = false;
                 ownChanges.clear();
                 damagePending = false;
+                damageDuringRefill = false;
                 createCoreMap(false);
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
@@ -747,6 +755,7 @@ module.exports = function core(bot) {
             refilling = false; cooldown = false;
             ownChanges.clear();
             damagePending = false;
+            damageDuringRefill = false;
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
