@@ -261,13 +261,13 @@ module.exports = function core(bot) {
             }
         }
 
-        if (!success) {
-            try {
-                if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
-                success = bot.chat('/' + command) !== false;
-            } catch (error) {
-                console.error(`[${bot.id}] [Core] Chat refill error:`, error);
-            }
+        // always run the /fill command; survivor command-block path above is only an optimization
+        try {
+            if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
+            const r = bot.chat('/' + command);
+            if (r !== false) success = true;
+        } catch (error) {
+            console.error(`[${bot.id}] [Core] Chat refill error:`, error);
         }
 
         if (!success && backupReady) {
