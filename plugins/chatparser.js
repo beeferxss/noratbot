@@ -366,9 +366,13 @@ module.exports = function chatParser(bot) {
             if (!p.isActionBar && p.content != null) write(bot, p.content);
         },
 
-        onChat(p) {
+        onChat(username, message) {
             cacheUUIDs(bot);
-            if (p.message != null) write(bot, p.message);
+            if (typeof username === 'string' && message != null) {
+                write(bot, `${username}: ${message}`);
+            } else if (message != null) {
+                write(bot, message);
+            }
         },
 
         onEnd() {

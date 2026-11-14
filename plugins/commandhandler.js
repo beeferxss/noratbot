@@ -274,10 +274,17 @@ if (!uuid) {
         console.error(`[${bot.id}] [CommandHandler] Error in "${cmd.name}":`, e);
     }
 }
+    const recentChatPlain = new Map();
     bot.on('chat_plain', msg => {
         if (typeof msg !== 'string') return;
         const clean = msg.replace(/\x1b\[[0-9;]*m/g, '').trim();
         if (!clean) return;
+        const now = Date.now();
+        const last = recentChatPlain.get(clean);
+        if (last && now - last < 1500) return;
+        recentChatPlain.set(clean, now);
+        // cleanup old entries
+        for (const [k, v] of recentChatPlain) { if (now - v > 5000) recentChatPlain.delete(k); }
 
         const player = extractPlayer(clean);
         if (logSettings.commands !== false) console.log(`[${bot.id}] [CommandHandler] chat_plain candidate: ${clean} -> ${player ? player.username + ' :: ' + player.commandText : 'null'}`);
