@@ -1,9 +1,13 @@
 const minecraftData = require('minecraft-data');
 
 module.exports = function core(bot) {
-    const cfg = bot.globalConfig?.core || bot.config?.core || {};
+    const rawCore = bot.globalConfig?.core || bot.config?.core || {};
+    const cfg = (rawCore && typeof rawCore === 'object' && bot.id && rawCore[bot.id] && typeof rawCore[bot.id] === 'object')
+        ? rawCore[bot.id]
+        : rawCore;
     const area = cfg.area || {};
     const refillConfig = cfg.refill || {};
+    const REFILL_ENABLED = refillConfig.enabled !== false;
 
     const ENABLED = cfg.enabled !== false;
     const VERSION = bot.config?.version || '1.21.11';
@@ -181,6 +185,7 @@ module.exports = function core(bot) {
     }
 
     function scheduleDamage(reason) {
+        if (!REFILL_ENABLED) return;
         if (!bot.core.ready || refilling || cooldown) return;
         if (damageTimer) clearTimeout(damageTimer);
         damageTimer = setTimeout(() => {
@@ -191,6 +196,7 @@ module.exports = function core(bot) {
     }
 
     async function refill(reason = 'damage') {
+        if (!REFILL_ENABLED) return false;
         if (!position) return false;
         if (refilling) return false;
         if (cooldown) return false;
@@ -651,7 +657,7 @@ module.exports = function core(bot) {
 
             const location = this._getNextBlock();
             if (!location) {
-                if (!refilling && !cooldown) {
+                if (REFILL_ENABLED && !refilling && !cooldown) {
                     this.refill('run-fallback');
                 }
                 return false;
