@@ -9,7 +9,7 @@ module.exports = function clickTokensPlugin(bot) {
         let cmd;
         do {
             token = Math.floor(Math.random() * (RANGE_MAX + 1));
-            cmd = `/random value ${token}..${token}`;
+            cmd = `/random value ${token}..${token + 1}`;
         } while (tokens.has(cmd));
         return cmd;
     }
@@ -68,8 +68,14 @@ module.exports = function clickTokensPlugin(bot) {
             pm = clean.match(/^([^:]+):\s*\/random/i);
             if (pm) player = pm[1].trim();
         }
+        if (!player) {
+            // fallback: any username-like token immediately before /random
+            pm = clean.match(/([A-Za-z0-9_]{2,16})[^\n]*\/random\s+value/i);
+            if (pm) player = pm[1];
+        }
         if (player) player = player.replace(/^\.+/, '').trim();
 
+        console.log(`[${bot.id}] [ClickTokens] parsed chat="${clean}" player="${player}" token="${tokenCmd}"`);
         return { player, tokenCmd };
     }
 
@@ -79,14 +85,20 @@ module.exports = function clickTokensPlugin(bot) {
         if (!parsed) return;
 
         const entry = resolve(parsed.tokenCmd);
-        if (!entry) return;
+        if (!entry) {
+            console.log(`[${bot.id}] [ClickTokens] no entry for ${parsed.tokenCmd}`);
+            return;
+        }
 
         const clickerName = parsed.player;
         if (!clickerName || clickerName.toLowerCase() === (bot.config?.username || bot.username || '').toLowerCase()) return;
 
+        const uuid = (bot.commands?.getPlayerUUID ? bot.commands.getPlayerUUID(clickerName) : null)
+            || (bot.playersAPI?.getUUID ? bot.playersAPI.getUUID(clickerName) : null)
+            || (bot.playersAPI?.get ? bot.playersAPI.get(clickerName)?.uuid : null);
         const player = {
             username: clickerName,
-            uuid: bot.commands?.getPlayerUUID ? bot.commands.getPlayerUUID(clickerName) : null,
+            uuid,
             usedPrefix: (bot.globalConfig?.bot?.prefix?.[0]) || 'nr:'
         };
 
