@@ -66,10 +66,12 @@ module.exports = function playersDatabase(bot) {
 
     function touchPlayer(player) {
         if (!player?.uuid || !player.username) return;
+        const prev = data.players[player.uuid] || {};
         data.players[player.uuid] = {
             username: player.username,
             lastSeenTime: Date.now(),
-            lastSeenServer: server
+            lastSeenServer: server,
+            ips: (prev.ips && typeof prev.ips === 'object' && !Array.isArray(prev.ips)) ? prev.ips : (prev.ips || {})
         };
         saveSoon();
     }
