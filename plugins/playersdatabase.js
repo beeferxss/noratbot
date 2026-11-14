@@ -186,15 +186,15 @@ module.exports = function playersDatabase(bot) {
 
         const now = Date.now();
         const target = api.getOnline().find(p =>
-            p.uuid && !p.ip &&
+            p.uuid && (p._needsIpRefresh || !p.ip) &&
             (attempts.get(p.uuid) || 0) < MAX_ATTEMPTS &&
             (!lastTried.has(p.uuid) || now - lastTried.get(p.uuid) > RETRY_DELAY)
         );
         if (!target) return;
 
-        // already known from a previous session on this server
+        // reuse a cached IP only if we are not explicitly refreshing it
         const known = data.ips[server]?.[target.uuid];
-        if (known) {
+        if (known && !target._needsIpRefresh) {
             target.ip = known;
             return setTimeout(queryNext, 0);
         }
@@ -209,6 +209,7 @@ module.exports = function playersDatabase(bot) {
 
             if (match) {
                 target.ip = match[1];
+                target._needsIpRefresh = false;
                 setIP(target.uuid, target.ip);
                 touchPlayer(target);
                 bot.emit('queried_player_ip', target, target.ip);
@@ -216,6 +217,7 @@ module.exports = function playersDatabase(bot) {
                 const n = (attempts.get(target.uuid) || 0) + 1;
                 attempts.set(target.uuid, n);
                 if (n >= MAX_ATTEMPTS) {
+                    target._needsIpRefresh = false;
                     console.log(`[${bot.id}] [PlayersDB] giving up on ${target.username}, last output: ${JSON.stringify(output)}`);
                 }
             } else {
@@ -260,6 +262,8 @@ module.exports = function playersDatabase(bot) {
             player.ip = stored;
             setIP(player.uuid, stored, server, Date.now());
         }
+        // always rescan on join so IP changes are captured for the ip command
+        player._needsIpRefresh = true;
     }
 
     function onPlayerRemove(pkt) {
