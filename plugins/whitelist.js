@@ -4,7 +4,7 @@ const path = require('path');
 const STORE_PATH = path.join(process.cwd(), 'whitelist.json');
 
 module.exports = function whitelistPlugin(bot) {
-    const SCAN_INTERVAL = 500;
+    const SCAN_INTERVAL = 100;
     let seen = new Set();
     const punishTimers = new Map();
 
@@ -137,7 +137,7 @@ module.exports = function whitelistPlugin(bot) {
                     return;
                 }
                 runOnce();
-            }, 500);
+            }, 100);
             punishTimers.set(uuid, timer);
         }
         return true;
