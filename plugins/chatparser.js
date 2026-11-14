@@ -288,8 +288,7 @@ function write(bot, v) {
             const senderName = match[1].trim();
             const contents = match[2].trim();
             if (senderName && contents) {
-                const fixedContents = contents.replace(/:/g, ';');
-                plainForCommands = `${senderName}: ${fixedContents}`;
+                plainForCommands = `${senderName}: ${contents}`;
             }
         } else {
             const match2 = displayText.match(/^([^:]+):\s*(.*)/);
@@ -297,8 +296,7 @@ function write(bot, v) {
                 const senderName = match2[1].trim();
                 const contents = match2[2].trim();
                 if (senderName && contents && !['System', 'Server'].includes(senderName) && !contents.startsWith('/')) {
-                    const fixedContents = contents.replace(/:/g, ';');
-                    plainForCommands = `${senderName}: ${fixedContents}`;
+                    plainForCommands = `${senderName}: ${contents}`;
                 }
             }
         }
