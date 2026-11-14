@@ -569,38 +569,48 @@ module.exports = function core(bot) {
 
         _getNextBlock() {
             const ox = this.origin.x, oy = this.origin.y, oz = this.origin.z;
-            const bx = this.bounds.x, by = this.bounds.y, bz = this.bounds.z;
-            for (let x = ox; x <= bx; x++) {
-                for (let y = oy; y <= by; y++) {
-                    for (let z = oz; z <= bz; z++) {
-                        const keyStr = key(x, y, z);
-                        const entry = coreBlocks.get(keyStr);
-                        if (entry && entry.alive) {
-                            this._cursor = { x, y, z };
-                            return { x, y, z };
-                        }
-                    }
+            const wx = this.bounds.x - ox + 1;
+            const wy = this.bounds.y - oy + 1;
+            const wz = this.bounds.z - oz + 1;
+            const volume = wx * wy * wz;
+            if (volume <= 0) return null;
+
+            let start = 0;
+            const c = this._cursor;
+            if (c && c.x !== null && c.y !== null && c.z !== null) {
+                start = (c.x - ox) + (c.y - oy) * wx + (c.z - oz) * wx * wy;
+                if (!Number.isFinite(start) || start < 0 || start >= volume) start = 0;
+            }
+
+            for (let i = 0; i < volume; i++) {
+                const idx = (start + i) % volume;
+                const x = ox + (idx % wx);
+                const y = oy + (Math.floor(idx / wx) % wy);
+                const z = oz + Math.floor(idx / (wx * wy));
+                const keyStr = key(x, y, z);
+                const entry = coreBlocks.get(keyStr);
+                if (entry && entry.alive) {
+                    this._cursor = { x, y, z };
+                    return { x, y, z };
                 }
             }
             return null;
         },
 
         _advanceCursor() {
-            let x = this._cursor.x;
-            let y = this._cursor.y;
-            let z = this._cursor.z;
-            x++;
-            if (x > this.bounds.x) {
-                x = this.origin.x;
-                y++;
-                if (y > this.bounds.y) {
-                    y = this.origin.y;
-                    z++;
-                    if (z > this.bounds.z) {
-                        z = this.origin.z;
-                    }
-                }
-            }
+            const c = this._cursor;
+            if (!c || c.x === null || c.y === null || c.z === null) return;
+            const ox = this.origin.x, oy = this.origin.y, oz = this.origin.z;
+            const wx = this.bounds.x - ox + 1;
+            const wy = this.bounds.y - oy + 1;
+            const wz = this.bounds.z - oz + 1;
+            const volume = wx * wy * wz;
+            if (volume <= 0) return;
+            let idx = (c.x - ox) + (c.y - oy) * wx + (c.z - oz) * wx * wy;
+            idx = (idx + 1) % volume;
+            const x = ox + (idx % wx);
+            const y = oy + (Math.floor(idx / wx) % wy);
+            const z = oz + Math.floor(idx / (wx * wy));
             this._cursor = { x, y, z };
         },
 
