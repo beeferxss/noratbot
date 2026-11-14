@@ -535,6 +535,53 @@ function loadCommands() {
             fail(`Failed to load ${file}:`, error);
         }
     }
+
+    log(`Loaded ${global.discordCommands.size} Discord command(s) from ${CMD_DIR}`);
+}
+
+let commandWatcher = null;
+
+function startCommandWatcher() {
+    if (commandWatcher) return;
+
+    if (!fs.existsSync(CMD_DIR)) {
+        fs.mkdirSync(CMD_DIR, { recursive: true });
+    }
+
+    try {
+        commandWatcher = fs.watch(CMD_DIR, { persistent: true, recursive: false }, (eventType, filename) => {
+            if (!filename || !filename.endsWith('.js')) return;
+
+            log(`Discord command file changed: ${filename} (${eventType}); reloading...`);
+
+            // Debounce rapid changes
+            if (commandWatcher._timeout) {
+                clearTimeout(commandWatcher._timeout);
+            }
+
+            commandWatcher._timeout = setTimeout(() => {
+                loadCommands();
+                void registerSlashCommands();
+                commandWatcher._timeout = null;
+            }, 500);
+        });
+
+        commandWatcher.on('error', (error) => {
+            fail('Command watcher error:', error.message);
+        });
+
+        log(`Watching ${CMD_DIR} for command changes`);
+    } catch (error) {
+        warn('Could not watch commands directory:', error.message);
+    }
+}
+
+function stopCommandWatcher() {
+    if (commandWatcher) {
+        commandWatcher.close();
+        commandWatcher = null;
+        log('Stopped watching commands directory');
+    }
 }
 
 function registerCommand(name, cmd) {
@@ -1633,6 +1680,7 @@ function bindClient(client) {
         log(`Logged in as ${client.user.tag}`);
 
         loadCommands();
+        startCommandWatcher();
         void registerSlashCommands();
         flushRelays();
     });
@@ -1770,13 +1818,85 @@ function setup(bot) {
     return true;
 }
 
-module.exports = function discordBridge(bot) {
-    if (!setup(bot)) return;
+function autoDiscoverBots() {
+    const manager = global.botManager;
+    if (!manager || !manager.list) return;
+
+    for (const bot of manager.list()) {
+        const id = String(bot.id || '').toLowerCase();
+        if (!id || global.discordBots.has(id)) continue;
+
+        registerBot(bot);
+        log(`Auto-discovered bot "${bot.id}"${bot.config?.channelId ? ` (channel ${bot.config.channelId})` : ''}`);
+    }
+}
+
+function onBotCreated(bot) {
+    const id = String(bot.id || '').toLowerCase();
+    if (!id || global.discordBots.has(id)) return;
+
+    if (!bridge.config) {
+        if (!setup(bot)) return;
+    }
+
     if (!ensureClient()) return;
 
     registerBot(bot);
+    log(`Bot "${bot.id}" registered via event${bot.config?.channelId ? ` (channel ${bot.config.channelId})` : ''}`);
+}
 
-    log(`Bridge active for "${bot.id}"${bot.config?.channelId ? ` (channel ${bot.config.channelId})` : ''}`);
+function onBotDestroyed(bot) {
+    const id = String(bot.id || '').toLowerCase();
+    if (!id) return;
+
+    global.discordBots.delete(id);
+    global.channelMap.forEach((linked, channelId) => {
+        if (linked.id === bot.id) global.channelMap.delete(channelId);
+    });
+
+    const relay = bridge.relays.get(id);
+    if (relay) {
+        relay.destroy();
+        bridge.relays.delete(id);
+    }
+
+    log(`Bot "${bot.id}" unregistered`);
+}
+
+function bindBotManagerEvents() {
+    const manager = global.botManager;
+    if (!manager) return;
+
+    if (manager.on) {
+        manager.on('bot:created', onBotCreated);
+        manager.on('bot:destroy', onBotDestroyed);
+        manager.on('bot:disconnect', (bot) => {
+            // Optional: handle disconnect if needed
+        });
+    }
+
+    // Initial discovery of existing bots
+    setTimeout(autoDiscoverBots, 1000);
+}
+
+module.exports = function discordBridge(bot) {
+    if (!setup(bot)) return;
+
+    // Ensure client is created (shared across all bots)
+    if (!ensureClient()) return;
+
+    // Register this bot if not already registered
+    const id = String(bot.id || '').toLowerCase();
+    if (id && !global.discordBots.has(id)) {
+        registerBot(bot);
+        log(`Bridge active for "${bot.id}"${bot.config?.channelId ? ` (channel ${bot.config.channelId})` : ''}`);
+    }
+
+    // Start auto-discovery if not already started
+    if (!bridge._autoDiscoverBound) {
+        bindBotManagerEvents();
+        bridge._autoDiscoverBound = true;
+    }
 };
 
 // Exposed for tests and tooling; not part of the bot API.
