@@ -563,8 +563,8 @@ module.exports = function core(bot) {
             if (HIDE) {
                 if (this.origin.x !== null) return true;
                 const maxSteps = Math.max(1, Math.floor((WORLD_BORDER - SIZE) / SIZE));
-                const rx = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE;
-                const rz = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE;
+                const rx = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE + Math.floor(Math.random() * SIZE);
+                const rz = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE + Math.floor(Math.random() * SIZE);
                 this.origin = { x: rx, y: Y, z: rz };
                 this.bounds = { x: rx + SIZE - 1, y: Y + SIZE - 1, z: rz + SIZE - 1 };
                 this.cursor = { ...this.origin };

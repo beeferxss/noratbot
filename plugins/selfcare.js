@@ -216,7 +216,10 @@ module.exports = function selfcare(bot) {
         if (!pkt || pkt.gamemode === undefined) return;
         gm = Number(pkt.gamemode);
         creativeReq = false;
+        vanished = false;
+        vanishReq = false;
         ensureCreative();
+        setTimeout(() => { if (ready && cfg.vanish !== false) ensureVanish(); }, 1000);
     }
 
     function onChatPlain(msg) {
@@ -324,7 +327,7 @@ module.exports = function selfcare(bot) {
         if (cfg.vanish !== false && !vanished && !vanishReq) {
             ensureVanish();
         }
-    }, 3000);
+    }, 1500);
 
     bot.selfcare = {
         getPermissionLevel: () => opLevel,
