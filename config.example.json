@@ -95,7 +95,7 @@
     "survivorMaxAge": 60000,
     "area": {
       "size": 8,
-      "y": 100
+      "y": 30
     },
 
     "refill": {
