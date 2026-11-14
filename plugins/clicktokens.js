@@ -1,4 +1,5 @@
 const RANGE_MAX = 3420556;
+const TOKEN_TTL_MS = 3 * 60 * 1000;
 
 module.exports = function clickTokensPlugin(bot) {
     const tokens = new Map(); // token command string -> { source, action }
@@ -16,8 +17,17 @@ module.exports = function clickTokensPlugin(bot) {
 
     function register(source, action) {
         const src = String(source || 'unknown').toLowerCase();
+        // prune expired tokens first
+        const now = Date.now();
+        for (const [cmd, entry] of tokens) {
+            if (now - (entry.createdAt || 0) > TOKEN_TTL_MS) {
+                tokens.delete(cmd);
+                const set = bySource.get(entry.source);
+                if (set) set.delete(cmd);
+            }
+        }
         const cmd = makeToken();
-        tokens.set(cmd, { source: src, action });
+        tokens.set(cmd, { source: src, action, createdAt: now });
         if (!bySource.has(src)) bySource.set(src, new Set());
         bySource.get(src).add(cmd);
         return cmd;
@@ -40,6 +50,12 @@ module.exports = function clickTokensPlugin(bot) {
         const key = String(cmdString || '').trim();
         const entry = tokens.get(key);
         if (!entry) return null;
+        if (Date.now() - (entry.createdAt || 0) > TOKEN_TTL_MS) {
+            tokens.delete(key);
+            const set = bySource.get(entry.source);
+            if (set) set.delete(key);
+            return null;
+        }
         tokens.delete(key);
         const set = bySource.get(entry.source);
         if (set) set.delete(key);
@@ -156,7 +172,19 @@ module.exports = function clickTokensPlugin(bot) {
         }
     };
 
+    const cleanupTimer = setInterval(() => {
+        const now = Date.now();
+        for (const [cmd, entry] of tokens) {
+            if (now - (entry.createdAt || 0) > TOKEN_TTL_MS) {
+                tokens.delete(cmd);
+                const set = bySource.get(entry.source);
+                if (set) set.delete(cmd);
+            }
+        }
+    }, 60 * 1000);
+
     bot.on('bot:destroy', () => {
+        clearInterval(cleanupTimer);
         tokens.clear();
         bySource.clear();
         bot.removeListener('chat_plain', handleChat);
