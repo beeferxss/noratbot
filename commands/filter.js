@@ -4,7 +4,7 @@ const path = require('path');
 module.exports = {
     name: 'filter',
     description: 'Manage filter (players, UUIDs, regex)',
-    usage: 'filter <on|off|list|add|remove|...>',
+    usage: 'filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|clear|clear-uuid|clear-ip|regex> ...',
     aliases: ["f"],
     level: 1,
 

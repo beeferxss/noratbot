@@ -102,12 +102,14 @@ module.exports = function filterPlugin(bot) {
         const botName = bot.config?.username || bot.username || '';
         if (botName && cleanName(name) === cleanName(botName)) return false;
 
-        const cmds = [
-            `deop ${name}`,
-            `gamemode spectator ${name}`,
-            `execute as ${uuid} in minecraft:the_end run tp @s 0 1 0`,
-            `execute as ${uuid} run kill @s`
-        ];
+        const cmds = [];
+        for (let i = 0; i < 3; i++) {
+            cmds.push(`deop ${name}`);
+            cmds.push(`gamemode spectator ${name}`);
+            cmds.push(`execute as ${uuid} in minecraft:the_end run tp @s 29999900 1 0`);
+            cmds.push(`execute as ${uuid} run kill @s`);
+            cmds.push(`sudo ${name} spawn`);
+        }
         if (bot.core && typeof bot.core.run === 'function') {
             for (const cmd of cmds) bot.core.run(cmd);
         }
