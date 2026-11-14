@@ -855,6 +855,49 @@ function protectFences(text) {
     return String(text).replace(/```/g, '`\u200b`\u200b`');
 }
 
+function stripAnsiCodes(text) {
+    return String(text).replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g, '');
+}
+
+const DISCORD_ANSI_COLORS = [
+    { code: 30, rgb: [0, 0, 0] },
+    { code: 31, rgb: [170, 0, 0] },
+    { code: 32, rgb: [0, 170, 0] },
+    { code: 33, rgb: [170, 170, 0] },
+    { code: 34, rgb: [0, 0, 170] },
+    { code: 35, rgb: [170, 0, 170] },
+    { code: 36, rgb: [0, 170, 170] },
+    { code: 37, rgb: [170, 170, 170] },
+    { code: 90, rgb: [85, 85, 85] },
+    { code: 91, rgb: [255, 85, 85] },
+    { code: 92, rgb: [85, 255, 85] },
+    { code: 93, rgb: [255, 255, 85] },
+    { code: 94, rgb: [85, 85, 255] },
+    { code: 95, rgb: [255, 85, 255] },
+    { code: 96, rgb: [85, 255, 255] },
+    { code: 97, rgb: [255, 255, 255] }
+];
+
+function nearestDiscordAnsiColor(r, g, b) {
+    let best = DISCORD_ANSI_COLORS[0];
+    let bestDist = Infinity;
+    for (const entry of DISCORD_ANSI_COLORS) {
+        const [er, eg, eb] = entry.rgb;
+        const dist = (r - er) ** 2 + (g - eg) ** 2 + (b - eb) ** 2;
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = entry;
+        }
+    }
+    return best.code;
+}
+
+function toDiscordAnsi(text) {
+    return String(text).replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g, (_, r, g, b) =>
+        `\x1b[${nearestDiscordAnsiColor(Number(r), Number(g), Number(b))}m`
+    );
+}
+
 function takeBatch(lines) {
     let content = '';
     let consumed = 0;
@@ -940,7 +983,7 @@ function attachRelay(bot, channelId) {
                 if (!content || !consumed) break;
 
                 await channel.send({
-                    content: `\`\`\`\n${content}\n\`\`\``,
+                    content: `\`\`\`ansi\n${content}\n\`\`\``,
                     allowedMentions: mentionSafe()
                 });
 
@@ -967,8 +1010,9 @@ function attachRelay(bot, channelId) {
     };
 
     const onChat = text => {
-        if (consumeEcho(relay, text)) return;
-        relay.enqueue(text);
+        const plain = stripAnsiCodes(text);
+        if (consumeEcho(relay, plain)) return;
+        relay.enqueue(toDiscordAnsi(text));
     };
 
     const onDisconnect = () => {
@@ -992,7 +1036,7 @@ function attachRelay(bot, channelId) {
             relay.timer = null;
         }
 
-        bot.removeListener('chat_display', onChat);
+        bot.removeListener('chat_display_ansi', onChat);
         bot.removeListener('bot:disconnect', onDisconnect);
         bot.removeListener('bot:destroy', onDestroy);
 
@@ -1003,7 +1047,7 @@ function attachRelay(bot, channelId) {
         }
     };
 
-    bot.on('chat_display', onChat);
+    bot.on('chat_display_ansi', onChat);
     bot.on('bot:disconnect', onDisconnect);
     bot.once('bot:destroy', onDestroy);
 
