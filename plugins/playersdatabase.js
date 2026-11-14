@@ -268,6 +268,7 @@ module.exports = function playersDatabase(bot) {
         }
         // always rescan on join so IP changes are captured for the ip command
         player._needsIpRefresh = true;
+        setTimeout(() => { try { queryNext(); } catch (e) {} }, 500);
     }
 
     function onPlayerRemove(pkt) {
@@ -285,6 +286,7 @@ module.exports = function playersDatabase(bot) {
         for (const p of api.getOnline()) {
             if (p.uuid) known.set(p.uuid, p);
             touchPlayer(p);
+            p._needsIpRefresh = true;
         }
     }
 
