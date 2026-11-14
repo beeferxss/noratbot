@@ -27,7 +27,7 @@ const COLORS = Object.freeze({
     warning: 0xFEE75C
 });
 
-const FOOTER = 'bananabot • Discord';
+const FOOTER = 'Discord';
 const COMMAND_PREFIX = '!';
 
 const RELAY = Object.freeze({

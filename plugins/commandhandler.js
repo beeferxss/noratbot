@@ -152,8 +152,7 @@ function configuredLevel(name) {
     }
 
     function tellrawCmd(text) {
-        const formatted = gradText('bananabot - ' + text, '#f4fcff', '#238bff');
-        return bot.core.run(`tellraw @a ${JSON.stringify(formatted)}`);
+        return bot.core.run(`tellraw @a ${JSON.stringify(text)}`);
     }
 
 
@@ -169,8 +168,8 @@ async function exec(cmdName, args, raw, msg, player) {
             const prefix = prefixes[0] || 'nr:';
             const helpCmd = `${prefix}help`;
             const components = [];
-            components.push(...gradText('bananabot - Command not found. ', '#f4fcff', '#238bff'));
-            components.push(...gradText('Try ', '#f4fcff', '#238bff'));
+            components.push({ text: 'Command not found. ', color: 'red' });
+            components.push({ text: 'Try ', color: 'gray' });
             components.push({
                 text: helpCmd,
                 color: '#55aaff',

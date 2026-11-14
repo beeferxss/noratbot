@@ -75,6 +75,7 @@ module.exports = function core(bot) {
     let chunkZ = null;
     let refilling = false;
     let cooldown = false;
+    let damagePending = false;
     let initialTimer = null;
     let chunkTimer = null;
     let damageTimer = null;
@@ -186,7 +187,8 @@ module.exports = function core(bot) {
 
     function scheduleDamage(reason) {
         if (!REFILL_ENABLED) return;
-        if (!bot.core.ready || refilling || cooldown) return;
+        if (!bot.core.ready || refilling) return;
+        if (cooldown) { damagePending = true; return; }
         if (damageTimer) clearTimeout(damageTimer);
         damageTimer = setTimeout(() => {
             damageTimer = null;
@@ -196,6 +198,7 @@ module.exports = function core(bot) {
     }
 
     async function refill(reason = 'damage') {
+        damagePending = false;
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
         if (refilling) return false;
@@ -272,7 +275,13 @@ module.exports = function core(bot) {
             refilling = false;
             bot.core.ready = true;
             cooldown = true;
-            setTimeout(() => { cooldown = false; }, REFILL_COOLDOWN);
+            setTimeout(() => {
+                cooldown = false;
+                if (damagePending) {
+                    damagePending = false;
+                    scheduleDamage('cooldown-end');
+                }
+            }, REFILL_COOLDOWN);
         }, REFILL_FINISH);
 
         return true;
@@ -280,7 +289,7 @@ module.exports = function core(bot) {
 
     const handlers = {
         onBlockChange(packet) {
-            if (!packet?.location || !bot.core.ready || refilling || cooldown) return;
+            if (!packet?.location || !bot.core.ready || refilling) return;
             const x = packet.location.x;
             const y = packet.location.y;
             const z = packet.location.z;
@@ -296,7 +305,7 @@ module.exports = function core(bot) {
         },
 
         onMapChunk(packet) {
-            if (!packet || !bot.core.ready || refilling || cooldown) return;
+            if (!packet || !bot.core.ready || refilling) return;
             const cx = packet.x;
             const cz = packet.z;
             if (cx !== chunkX || cz !== chunkZ) return;
@@ -349,7 +358,7 @@ module.exports = function core(bot) {
         },
 
         onMultiBlockChange(packet) {
-            if (!packet || !bot.core.ready || refilling || cooldown) return;
+            if (!packet || !bot.core.ready || refilling) return;
             if (!Array.isArray(packet.records)) return;
             const coordinates = packet.chunkCoordinates;
             if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') return;
@@ -579,6 +588,7 @@ module.exports = function core(bot) {
                 chunkZ = Math.floor(rz / SIZE);
                 this.ready = false;
                 ownChanges.clear();
+                damagePending = false;
                 createCoreMap(false);
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
@@ -736,6 +746,7 @@ module.exports = function core(bot) {
             chunkX = null; chunkZ = null;
             refilling = false; cooldown = false;
             ownChanges.clear();
+            damagePending = false;
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
