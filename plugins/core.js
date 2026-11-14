@@ -1,7 +1,7 @@
 const minecraftData = require('minecraft-data');
 
 module.exports = function core(bot) {
-    const cfg = bot.config?.core || {};
+    const cfg = bot.globalConfig?.core || bot.config?.core || {};
     const area = cfg.area || {};
     const refillConfig = cfg.refill || {};
 
