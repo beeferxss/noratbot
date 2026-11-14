@@ -9,6 +9,8 @@ module.exports = function core(bot) {
     const VERSION = bot.config?.version || '1.21.11';
     const SIZE = Number.isFinite(Number(area.size)) ? Number(area.size) : 16;
     const Y = Number.isFinite(Number(area.y)) ? Number(area.y) : 30;
+    const HIDE = cfg.hide === true;
+    const WORLD_BORDER = Number.isFinite(Number(cfg.worldBorder)) ? Math.max(SIZE, Number(cfg.worldBorder)) : 29999984;
     const BLOCK = typeof refillConfig.block === 'string' && refillConfig.block.trim()
         ? refillConfig.block.trim().replace(/^minecraft:/, '')
         : 'repeating_command_block'; // {CustomName:{"text":"https://norat.pw","color":"blue","click_event":{"action":"open_url","url":"https://norat.pw"}}}
@@ -377,12 +379,22 @@ module.exports = function core(bot) {
             if (!initialized) {
                 initialized = true;
                 bot.core.reset();
+                if (HIDE && bot.core.pendingTeleport) {
+                    const tp = bot.core.pendingTeleport;
+                    bot.core.pendingTeleport = null;
+                    setTimeout(() => {
+                        if (bot && typeof bot.chat === 'function') {
+                            try { bot.chat(`/tp @s ${tp.x} ${tp.y} ${tp.z}`); } catch (e) {}
+                        }
+                    }, 3000);
+                }
                 initialTimer = setTimeout(() => {
                     initialTimer = null;
                     if (position) bot.core.refill('initial');
-                }, INITIAL_DELAY);
+                }, HIDE ? Math.max(INITIAL_DELAY, 8000) : INITIAL_DELAY);
                 return;
             }
+            if (HIDE) return;
             const cx = Math.floor(position.x / SIZE);
             const cz = Math.floor(position.z / SIZE);
             if (cx === chunkX && cz === chunkZ) return;
@@ -545,8 +557,27 @@ module.exports = function core(bot) {
         bounds: { x: null, y: Y + SIZE - 1, z: null },
         cursor: { x: null, y: Y, z: null },
         _cursor: { x: null, y: Y, z: null },
+        pendingTeleport: null,
 
         reset() {
+            if (HIDE) {
+                if (this.origin.x !== null) return true;
+                const maxSteps = Math.max(1, Math.floor((WORLD_BORDER - SIZE) / SIZE));
+                const rx = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE;
+                const rz = (Math.floor(Math.random() * (2 * maxSteps + 1)) - maxSteps) * SIZE;
+                this.origin = { x: rx, y: Y, z: rz };
+                this.bounds = { x: rx + SIZE - 1, y: Y + SIZE - 1, z: rz + SIZE - 1 };
+                this.cursor = { ...this.origin };
+                this._cursor = { ...this.origin };
+                chunkX = Math.floor(rx / SIZE);
+                chunkZ = Math.floor(rz / SIZE);
+                this.ready = false;
+                ownChanges.clear();
+                createCoreMap(false);
+                this.pendingTeleport = { x: rx, y: Y, z: rz };
+                console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
+                return true;
+            }
             if (!position) return false;
             const cx = Math.floor(position.x / SIZE);
             const cz = Math.floor(position.z / SIZE);
@@ -701,6 +732,7 @@ module.exports = function core(bot) {
             ownChanges.clear();
             coreBlocks.clear();
             this.ready = false;
+            this.pendingTeleport = null;
             this.origin = { x: null, y: Y, z: null };
             this.bounds = { x: null, y: Y + SIZE - 1, z: null };
             this.cursor = { x: null, y: Y, z: null };
