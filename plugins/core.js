@@ -190,6 +190,7 @@ module.exports = function core(bot) {
         if (!packet) return null;
         if (packet.blockState !== undefined) return packet.blockState;
         if (packet.state !== undefined) return packet.state;
+        if (packet.stateId !== undefined) return packet.stateId;
         if (packet.type !== undefined) return packet.type;
         return null;
     }
@@ -352,6 +353,10 @@ module.exports = function core(bot) {
                 markBlock(x, y, z, true, true);
                 return;
             }
+            if (state === null) {
+                // unknown state (e.g. repeating block tick) - ignore, do not treat as damage
+                return;
+            }
             markBlock(x, y, z, false, true);
             scheduleDamage(`block-change ${x} ${y} ${z}`);
         },
@@ -383,11 +388,15 @@ module.exports = function core(bot) {
                     for (let y = originY; y <= boundsY; y++) {
                         for (let z = originZ; z <= boundsZ; z++) {
                             const block = chunk.getBlock({ x: x & 15, y, z: z & 15 });
-                            const isRepeating = block && block.name && block.name.includes('repeating_command_block');
+                            const blockName = block && block.name ? String(block.name) : '';
+                            const knownBlock = blockName !== '';
+                            const isRepeating = blockName.includes('repeating_command_block') || blockName.includes('chain_command_block');
                             const keyStr = key(x, y, z);
                             const entry = coreBlocks.get(keyStr);
                             if (entry) {
-                                if (!isRepeating) {
+                                if (!knownBlock) {
+                                    // unknown block data in chunk - ignore, do not treat as damage
+                                } else if (!isRepeating) {
                                     entry.alive = false;
                                     entry.verifiedAt = Date.now();
                                     damaged = true;
@@ -437,6 +446,8 @@ module.exports = function core(bot) {
                 const correct = isRepeatingState(stateId);
                 if (correct === true) {
                     markBlock(x, y, z, true, true);
+                } else if (correct === null) {
+                    // unknown state - ignore
                 } else {
                     markBlock(x, y, z, false, true);
                     damaged = true;
