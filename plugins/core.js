@@ -50,14 +50,17 @@ module.exports = function core(bot) {
     const repeatingStateIds = new Set();
     try {
         mcData = minecraftData(VERSION);
-        const block = mcData?.blocksByName?.[BLOCK];
-        if (block) {
-            if (Number.isInteger(block.minStateId) && Number.isInteger(block.maxStateId)) {
-                for (let id = block.minStateId; id <= block.maxStateId; id++) {
-                    repeatingStateIds.add(id);
+        const names = new Set([String(BLOCK).toLowerCase(), 'repeating_command_block', 'chain_command_block']);
+        for (const name of names) {
+            const block = mcData?.blocksByName?.[name] || mcData?.blocksByName?.[`minecraft:${name}`];
+            if (block) {
+                if (Number.isInteger(block.minStateId) && Number.isInteger(block.maxStateId)) {
+                    for (let id = block.minStateId; id <= block.maxStateId; id++) {
+                        repeatingStateIds.add(id);
+                    }
+                } else if (Number.isInteger(block.defaultState)) {
+                    repeatingStateIds.add(block.defaultState);
                 }
-            } else if (Number.isInteger(block.defaultState)) {
-                repeatingStateIds.add(block.defaultState);
             }
         }
     } catch (error) {
@@ -171,7 +174,8 @@ module.exports = function core(bot) {
         if (typeof state === 'number') return repeatingStateIds.has(state);
         if (typeof state === 'bigint') return repeatingStateIds.has(Number(state));
         if (typeof state === 'string') {
-            return state.replace(/^minecraft:/, '').toLowerCase() === BLOCK.toLowerCase();
+            const n = state.replace(/^minecraft:/, '').toLowerCase();
+            return n === String(BLOCK).toLowerCase() || n === 'repeating_command_block' || n === 'chain_command_block';
         }
         if (typeof state === 'object') {
             if (Number.isInteger(state.stateId)) return repeatingStateIds.has(state.stateId);

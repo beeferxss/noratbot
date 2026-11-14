@@ -1385,7 +1385,39 @@ async function handlePrefixCommand(message, name, args) {
     const dedicated = commandsChannelId();
     const inCommandsChannel = Boolean(dedicated) && String(message.channel.id) === dedicated;
 
-    // Prefer dynamic in-game commands over static discord commands.
+    const discordCommand = global.discordCommands.get(name);
+
+    if (discordCommand) {
+        await runDiscordCommand(discordCommand, invocation);
+        return true;
+    }
+
+    if (name === 'mc' || name === 'minecraft') {
+        let target = invocation.bot;
+        let words = [...args];
+
+        if (words.length > 1) {
+            const explicit = getBot(words[0]);
+
+            if (explicit) {
+                target = explicit;
+                words = words.slice(1);
+            }
+        }
+
+        if (!target) {
+            await sendOutput(responder, `Choose a server: ${serverList() || 'none registered'}.`, {
+                title: 'Minecraft command',
+                color: COLORS.error
+            });
+            return true;
+        }
+
+        await runMinecraftCommandByName(target, words, { ...invocation, bot: target });
+        return true;
+    }
+
+    // Dynamic in-game commands (from linked bot or commands channel).
     if (linked || inCommandsChannel) {
         let target = linked;
         let cmdArgs = args;
@@ -1423,38 +1455,6 @@ async function handlePrefixCommand(message, name, args) {
             });
             return true;
         }
-    }
-
-    const discordCommand = global.discordCommands.get(name);
-
-    if (discordCommand) {
-        await runDiscordCommand(discordCommand, invocation);
-        return true;
-    }
-
-    if (name === 'mc' || name === 'minecraft') {
-        let target = invocation.bot;
-        let words = [...args];
-
-        if (words.length > 1) {
-            const explicit = getBot(words[0]);
-
-            if (explicit) {
-                target = explicit;
-                words = words.slice(1);
-            }
-        }
-
-        if (!target) {
-            await sendOutput(responder, `Choose a server: ${serverList() || 'none registered'}.`, {
-                title: 'Minecraft command',
-                color: COLORS.error
-            });
-            return true;
-        }
-
-        await runMinecraftCommandByName(target, words, { ...invocation, bot: target });
-        return true;
     }
 
     return false;
