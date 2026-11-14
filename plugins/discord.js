@@ -1009,10 +1009,14 @@ function attachRelay(bot, channelId) {
         }
     };
 
-    const onChat = text => {
+    const onChat = (username, message) => {
+        const text = (typeof username === 'string' && message != null)
+            ? `${username}: ${message}`
+            : (message != null ? String(message) : (username != null ? String(username) : ''));
+        if (!text.trim()) return;
         const plain = stripAnsiCodes(text);
         if (consumeEcho(relay, plain)) return;
-        relay.enqueue(toDiscordAnsi(text));
+        relay.enqueue(text);
     };
 
     const onDisconnect = () => {
@@ -1036,7 +1040,7 @@ function attachRelay(bot, channelId) {
             relay.timer = null;
         }
 
-        bot.removeListener('chat_display_ansi', onChat);
+        bot.removeListener('chat', onChat);
         bot.removeListener('bot:disconnect', onDisconnect);
         bot.removeListener('bot:destroy', onDestroy);
 
@@ -1047,7 +1051,7 @@ function attachRelay(bot, channelId) {
         }
     };
 
-    bot.on('chat_display_ansi', onChat);
+    bot.on('chat', onChat);
     bot.on('bot:disconnect', onDisconnect);
     bot.once('bot:destroy', onDestroy);
 
