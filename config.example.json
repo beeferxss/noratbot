@@ -116,7 +116,7 @@
     "refill": {
       "enabled": true,
       "block": "command_block",
-      "mode": "destroy"
+      "mode": "refill"
     }
   },
 

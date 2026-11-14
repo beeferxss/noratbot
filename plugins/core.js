@@ -20,7 +20,7 @@ module.exports = function core(bot) {
         : 'repeating_command_block'; // {CustomName:{"text":"https://norat.pw","color":"blue","click_event":{"action":"open_url","url":"https://norat.pw"}}}
     const MODE = typeof refillConfig.mode === 'string' && refillConfig.mode.trim()
         ? refillConfig.mode.trim()
-        : 'destroy';
+        : 'refill';
 
     const INITIAL_DELAY = Number.isFinite(Number(cfg.initialDelay)) ? Number(cfg.initialDelay) : 2000;
     const CHUNK_DELAY = Number.isFinite(Number(cfg.chunkChangeDelay)) ? Number(cfg.chunkChangeDelay) : 200;
