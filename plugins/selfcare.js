@@ -209,11 +209,8 @@ module.exports = function selfcare(bot) {
 
         nickReq = true;
         try {
-            // Run in chat and pull first as requested.
-            bot.chat('/pull');
-            setTimeout(() => {
-                try { bot.chat(`/nick ${name}`); } catch (e) {}
-            }, 300);
+            // Run nick in chat as requested.
+            bot.chat(`/nick ${name}`);
         } catch (e) {}
         setTimeout(() => {
             nickReq = false;
