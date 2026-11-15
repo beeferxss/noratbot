@@ -4,7 +4,7 @@
       {
         "id": "chomens",
         "enabled": true,
-        "host": "chayapak.chipmunk.land",
+        "host": "chayapak1.dev",
         "port": 25565,
         "version": "26.1",
         "username": "women_bot",
@@ -108,7 +108,7 @@
     "creative": true,
     "selfCare": true,
     "unmute": true,
-    "vanish": true,
+    "vanish": false,
     "trustedKey": "",
     "adminKey": "",
     "authList": {
@@ -124,13 +124,13 @@
     "worldBorder": 29999984,
     "survivorMaxAge": 60000,
     "area": {
-      "size": 10,
-      "y": 30
+      "size": 11,
+      "y": 100
     },
     "refill": {
       "enabled": true,
       "block": "repeating_command_block",
-      "mode": "replace"
+      "mode": "strict"
     }
   },
   "spawnproof": {
