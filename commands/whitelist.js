@@ -1,7 +1,7 @@
 module.exports = {
     name: 'whitelist',
     description: 'Manage whitelist (on/off, add/remove players)',
-    usage: 'whitelist <on|off|add|remove|add-ip|remove-ip|mute|unmute|list|clear|clear-mute>',
+    usage: 'whitelist <on|off|add|remove|add-ip|remove-ip|list|clear>',
     aliases: ['wl'],
     level: 1,
 
@@ -23,7 +23,7 @@ module.exports = {
         const isIp = s => /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
 
         if (!sub) {
-            say('Usage: whitelist <on|off|add|remove|mute|unmute|list|clear> [target]');
+            say('Usage: whitelist <on|off|add|remove|list|clear> [player]');
             return;
         }
 
@@ -43,8 +43,7 @@ module.exports = {
             const players = w.listPlayers() || [];
             const uuids = w.listUUIDs() || [];
             const ips = w.listIPs() || [];
-            const mutes = w.listMutes ? (w.listMutes() || []) : [];
-            say(`Whitelist ${w.isEnabled() ? 'ON' : 'OFF'}\nPlayers: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}\nMutes: ${mutes.length ? mutes.join(', ') : '(empty)'}`);
+            say(`Whitelist ${w.isEnabled() ? 'ON' : 'OFF'}\nPlayers: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}`);
             return;
         }
 
@@ -52,14 +51,7 @@ module.exports = {
             w.clearPlayers();
             w.clearUUIDs();
             w.clearIPs();
-            if (w.clearMutes) w.clearMutes();
             say('Cleared whitelist.');
-            return;
-        }
-
-        if (sub === 'clear-mute' || sub === 'clear-mutes') {
-            const ok = w.clearMutes ? w.clearMutes() : false;
-            say(ok ? 'Cleared all mute targets.' : 'Failed to clear mute targets.');
             return;
         }
 
@@ -89,22 +81,6 @@ module.exports = {
             return;
         }
 
-        if (sub === 'mute') {
-            if (!rest.length) return say('Usage: whitelist mute <target>');
-            const val = rest.join(' ').trim();
-            const ok = w.addMute ? w.addMute(val) : false;
-            say(ok ? `Added mute target "${val}" (runs on start, join, and self-unmute).` : `Failed to add mute target "${val}" (maybe exists or unsupported).`);
-            return;
-        }
-
-        if (sub === 'unmute' || sub === 'remove-mute') {
-            if (!rest.length) return say('Usage: whitelist unmute <target>');
-            const val = rest.join(' ').trim();
-            const ok = w.removeMute ? w.removeMute(val) : false;
-            say(ok ? `Removed mute target "${val}".` : `Failed to remove mute target "${val}" (not found).`);
-            return;
-        }
-
-        say(`Unknown subcommand: ${sub}. Available: on, off, add, remove, mute, unmute, list, clear, clear-mute`);
+        say(`Unknown subcommand: ${sub}. Available: on, off, add, remove, list, clear`);
     }
 };
