@@ -170,14 +170,21 @@ async function exec(cmdName, args, raw, msg, player) {
             const helpCmd = `${prefix}help`;
             const msg = `Command not found. Try ${helpCmd}.`;
             if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
+                let clickEvent = { action: 'suggest_command', command: helpCmd };
+                if (bot.clickTokens && typeof bot.clickTokens.register === 'function') {
+                    const tokenCmd = bot.clickTokens.register('command-not-found-help', async (clickerName, clickerPlayer) => {
+                        await bot.commands.execute('help', [], helpCmd, null, clickerPlayer);
+                    });
+                    clickEvent = { action: 'run_command', command: tokenCmd };
+                }
                 const components = [];
                 components.push({ text: 'Command not found. ', color: 'red' });
                 components.push({ text: 'Try ', color: 'gray' });
                 components.push({
                     text: helpCmd,
                     color: '#55aaff',
-                    click_event: { action: 'suggest_command', command: helpCmd },
-                    hover_event: { action: 'show_text', value: { text: `Click to suggest ${helpCmd}`, color: 'green' } }
+                    click_event: clickEvent,
+                    hover_event: { action: 'show_text', value: { text: `Click to run ${helpCmd}`, color: 'green' } }
                 });
                 const root = { text: '', extra: components };
                 bot.core.run(`tellraw ${player.username} ${JSON.stringify(root)}`);
