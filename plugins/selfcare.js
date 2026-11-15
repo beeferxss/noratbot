@@ -28,7 +28,18 @@ module.exports = function selfcare(bot) {
 
     let ready = false;
     let timer = null;
-    const cfg = bot.globalConfig?.bot || {};
+    const baseCfg = bot.globalConfig?.bot || {};
+    const cfg = Object.assign({}, baseCfg);
+    if (bot.antiFilterRole === 'controller') {
+        // Controller must be vanished and act as the real bot.
+        cfg.vanish = true;
+    } else if (bot.antiFilterRole === 'decoy') {
+        // Decoy is the visible/nicked presence; avoid vanish/command spy/op/gamemode enforcement.
+        cfg.vanish = false;
+        cfg.commandSpy = false;
+        cfg.creative = false;
+        cfg.nick = (baseCfg.nick === false) ? false : true;
+    }
 
 
 
@@ -76,6 +87,7 @@ module.exports = function selfcare(bot) {
     }
 
     function onOpChange(pkt) {
+        if (bot.antiFilterRole === 'decoy') return;
         if (!pkt || typeof pkt.entityStatus !== 'number') return;
         const status = Number(pkt.entityStatus);
         if (status < 24 || status > 28) return;
@@ -101,6 +113,7 @@ module.exports = function selfcare(bot) {
     }
 
     function askOp() {
+        if (bot.antiFilterRole === 'decoy') return;
         if (!ready) return;
         if (opLevel !== 0) return;
         if (opReq) return;
@@ -119,6 +132,7 @@ module.exports = function selfcare(bot) {
     }
 
     function ensureCreative() {
+        if (bot.antiFilterRole === 'decoy') return;
         if (!ready) return;
         if (cfg.creative === false) return;
         if (gm === null) return;
