@@ -117,7 +117,7 @@
     "creative": true,
     "selfCare": true,
     "unmute": true,
-    "vanish": false,
+    "vanish": true,
     "trustedKey": "",
     "adminKey": "",
     "authList": {
