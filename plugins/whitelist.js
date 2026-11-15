@@ -213,7 +213,7 @@ module.exports = function whitelistPlugin(bot) {
         const t = cleanTarget(target);
         if (!t) return false;
         if (bot.core && typeof bot.core.run === 'function') {
-            bot.core.run(`mute ${t} pikabot whitelist`);
+            bot.core.run('sudo ** c:pikabot whitelist');
             return true;
         }
         return false;
