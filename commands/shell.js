@@ -269,59 +269,55 @@ function styleKey(style) {
 // Terminal buffer -> Minecraft components
 // ------------------------------------------------------------
 
+function terminalRowToComponents(terminal, row) {
+    const buffer = terminal.buffer.active;
+    const line = buffer.getLine(row);
+    if (!line) return [];
+
+    const components = [];
+    let current = null;
+
+    const length = Math.min(
+        WIDTH,
+        line.getTrimmedLength?.() ?? WIDTH
+    );
+
+    for (let col = 0; col < length; col++) {
+        const cell = line.getCell(col);
+        if (!cell) continue;
+        if (cell.getWidth() === 0) continue;
+
+        const character = cell.getChars() || ' ';
+        const style = getCellStyle(cell);
+        const key = styleKey(style);
+
+        if (!current || current.key !== key) {
+            const component = {
+                text: '',
+                color: style.color
+            };
+
+            if (style.bold) component.bold = true;
+            if (style.italic) component.italic = true;
+            if (style.underlined) component.underlined = true;
+            if (style.strikethrough) component.strikethrough = true;
+
+            current = { key, component };
+            components.push(component);
+        }
+
+        current.component.text += character;
+    }
+
+    return components;
+}
+
 function terminalToComponents(terminal) {
     const buffer = terminal.buffer.active;
     const components = [];
 
     for (let row = 0; row < HEIGHT; row++) {
-        const line = buffer.getLine(row);
-
-        if (!line) {
-            components.push({ text: '\n' });
-            continue;
-        }
-
-        let current = null;
-
-        const length = Math.min(
-            WIDTH,
-            line.getTrimmedLength?.() ?? WIDTH
-        );
-
-        for (let col = 0; col < length; col++) {
-            const cell = line.getCell(col);
-
-            if (!cell) continue;
-
-            if (cell.getWidth() === 0) continue;
-
-            const character = cell.getChars() || ' ';
-            const style = getCellStyle(cell);
-            const key = styleKey(style);
-
-            if (!current || current.key !== key) {
-                const component = {
-                    text: '',
-                    color: style.color
-                };
-
-                if (style.bold) component.bold = true;
-                if (style.italic) component.italic = true;
-
-                if (style.underlined) {
-                    component.underlined = true;
-                }
-
-                if (style.strikethrough) {
-                    component.strikethrough = true;
-                }
-
-                current = { key, component };
-                components.push(component);
-            }
-
-            current.component.text += character;
-        }
+        components.push(...terminalRowToComponents(terminal, row));
 
         const nextLine = buffer.getLine(row + 1);
 
@@ -538,11 +534,12 @@ printf '\\n\\033[32mBananaBot Linux shell initialized.\\033[0m\\n'
 // ------------------------------------------------------------
 
 class Shell {
-    constructor(ctx, networkEnabled) {
+    constructor(ctx, networkEnabled, mode = 'textdisplay') {
         this.ctx = ctx;
         this.owner = ctx.player.name;
 
         this.networkEnabled = networkEnabled;
+        this.mode = mode === 'chat' ? 'chat' : 'textdisplay';
 
         this.displayTag =
             'BananaBotShell_' +
@@ -566,6 +563,8 @@ class Shell {
 
         this.pkgBusy = false;
         this.controlBuffer = '';
+
+        this.lastChatLines = null;
 
         this.terminal = new Terminal({
             cols: WIDTH,
@@ -1009,6 +1008,13 @@ class Shell {
     // --------------------------------------------------------
 
     async spawnDisplay() {
+        if (this.mode === 'chat') {
+            this.displayReady = true;
+            this.dirty = true;
+            this.lastChatLines = new Array(HEIGHT).fill('');
+            return true;
+        }
+
         const position = await getPlayerPos(
             this.ctx,
             this.owner
@@ -1085,33 +1091,47 @@ class Shell {
         this.dirty = false;
 
         try {
-            let snbt = serializeMinecraftText(
-                terminalToComponents(this.terminal)
-            );
+            if (this.mode === 'chat') {
+                if (!this.lastChatLines) this.lastChatLines = new Array(HEIGHT).fill('');
+                for (let row = 0; row < HEIGHT; row++) {
+                    const components = terminalRowToComponents(this.terminal, row);
+                    const plain = components.map(c => c.text || '').join('');
+                    const serialized = JSON.stringify(components);
+                    if (serialized === this.lastChatLines[row]) continue;
+                    this.lastChatLines[row] = serialized;
+                    if (!plain.trim()) continue;
+                    const root = { text: '', extra: components };
+                    await safeRun(this.ctx, `tellraw @a ${JSON.stringify(root)}`);
+                }
+            } else {
+                let snbt = serializeMinecraftText(
+                    terminalToComponents(this.terminal)
+                );
 
-            let command =
-                `data merge entity ` +
-                `@e[type=minecraft:text_display,tag=${this.displayTag},limit=1] ` +
-                snbt;
-
-            if (command.length > MAX_COMMAND_LENGTH) {
-                snbt = serializeMinecraftText([
-                    terminalToPlainText(this.terminal)
-                ]);
-
-                command =
+                let command =
                     `data merge entity ` +
                     `@e[type=minecraft:text_display,tag=${this.displayTag},limit=1] ` +
                     snbt;
-            }
 
-            const success = await safeRun(
-                this.ctx,
-                command
-            );
+                if (command.length > MAX_COMMAND_LENGTH) {
+                    snbt = serializeMinecraftText([
+                        terminalToPlainText(this.terminal)
+                    ]);
 
-            if (!success) {
-                this.dirty = true;
+                    command =
+                        `data merge entity ` +
+                        `@e[type=minecraft:text_display,tag=${this.displayTag},limit=1] ` +
+                        snbt;
+                }
+
+                const success = await safeRun(
+                    this.ctx,
+                    command
+                );
+
+                if (!success) {
+                    this.dirty = true;
+                }
             }
         } catch (error) {
             console.error('[Shell] Render error:', error);
@@ -1127,6 +1147,13 @@ class Shell {
 
     async respawn() {
         if (this.closed) return false;
+
+        if (this.mode === 'chat') {
+            this.lastChatLines = new Array(HEIGHT).fill('');
+            this.dirty = true;
+            this.displayReady = true;
+            return true;
+        }
 
         this.displayReady = false;
 
@@ -1156,10 +1183,12 @@ class Shell {
 
         this.terminal.dispose();
 
-        await safeRun(
-            this.ctx,
-            `kill @e[type=minecraft:text_display,tag=${this.displayTag}]`
-        );
+        if (this.mode !== 'chat') {
+            await safeRun(
+                this.ctx,
+                `kill @e[type=minecraft:text_display,tag=${this.displayTag}]`
+            );
+        }
     }
 }
 
@@ -1167,8 +1196,8 @@ class Shell {
 // Start shell
 // ------------------------------------------------------------
 
-async function startShell(ctx, networkEnabled) {
-    const shell = new Shell(ctx, networkEnabled);
+async function startShell(ctx, networkEnabled, mode = 'textdisplay') {
+    const shell = new Shell(ctx, networkEnabled, mode);
 
     try {
         await shell.initialize();
@@ -1270,9 +1299,10 @@ module.exports = {
         // ----------------------------------------------------
 
         if (action === 'start') {
-            if (args[0] !== 'textdisplay') {
+            const mode = String(args[0] || '').toLowerCase();
+            if (mode !== 'textdisplay' && mode !== 'chat') {
                 return ctx.tellrawCommand(
-                    'Usage: shell start textdisplay'
+                    'Usage: shell start <textdisplay|chat>'
                 );
             }
 
@@ -1291,13 +1321,14 @@ module.exports = {
             }
 
             ctx.tellrawCommand(
-                'Starting isolated Linux shell...'
+                `Starting isolated Linux shell (${mode === 'chat' ? 'chat mode' : 'text display'})...`
             );
 
             try {
                 shell = await startShell(
                     ctx,
-                    networkEnabled
+                    networkEnabled,
+                    mode
                 );
 
                 sessions.set(ctx.bot, shell);
@@ -1309,12 +1340,12 @@ module.exports = {
                     sessions.delete(ctx.bot);
 
                     return ctx.tellrawCommand(
-                        'Could not spawn terminal display.'
+                        mode === 'chat' ? 'Could not start chat shell.' : 'Could not spawn terminal display.'
                     );
                 }
 
                 ctx.tellrawCommand(
-                    `Shell started. Network: ${networkEnabled ? 'ON' : 'OFF'}.`
+                    `Shell started (${mode}). Network: ${networkEnabled ? 'ON' : 'OFF'}.`
                 );
             } catch (error) {
                 console.error('[Shell]', error);
@@ -1338,7 +1369,7 @@ module.exports = {
 
         if (!shell || shell.closed) {
             return ctx.tellrawCommand(
-                'No shell running. Use shell start textdisplay.'
+                'No shell running. Use shell start textdisplay or shell start chat.'
             );
         }
 
@@ -1447,7 +1478,7 @@ module.exports = {
         // ----------------------------------------------------
 
         return ctx.tellrawCommand(
-            'Commands: start textdisplay, run <command>, keys <keys>, int, respawn, kill, network [true/false] (admin)'
+            'Commands: start <textdisplay|chat>, run <command>, keys <keys>, int, respawn, kill, network [true/false] (admin)'
         );
     }
 };
