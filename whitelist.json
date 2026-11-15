@@ -4,5 +4,35 @@
         "players": [],
         "uuids": [],
         "ips": []
+    },
+    "chomens": {
+        "enabled": false,
+        "players": [],
+        "uuids": [],
+        "ips": []
+    },
+    "blackbox": {
+        "enabled": false,
+        "players": [],
+        "uuids": [],
+        "ips": []
+    },
+    "hceboom": {
+        "enabled": false,
+        "players": [],
+        "uuids": [],
+        "ips": []
+    },
+    "kaboom": {
+        "enabled": false,
+        "players": [],
+        "uuids": [],
+        "ips": []
+    },
+    "chipmunk": {
+        "enabled": false,
+        "players": [],
+        "uuids": [],
+        "ips": []
     }
 }

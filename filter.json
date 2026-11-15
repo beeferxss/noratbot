@@ -5,5 +5,45 @@
         "uuids": [],
         "ips": [],
         "regex": null
+    },
+    "chomens": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
+    },
+    "blackbox": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
+    },
+    "hceboom": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
+    },
+    "chipmunk": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
+    },
+    "kaboom": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
     }
 }
