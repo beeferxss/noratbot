@@ -1,6 +1,6 @@
 {
   "minecraft": {
-        "servers": [
+    "servers": [
       {
         "id": "chomens",
         "enabled": true,
@@ -56,14 +56,12 @@
         "channelId": "1450456420343480370"
       }
     ],
-
     "connection": {
       "autoReconnect": true,
       "reconnectDelay": 3000,
       "maxReconnectDelay": 5000
     }
   },
-
   "proxy": {
     "enabled": true,
     "sources": [
@@ -85,7 +83,6 @@
     "probeCandidates": 6,
     "fallbackDirect": true
   },
-
   "discord": {
     "enabled": true,
     "token": "",
@@ -96,9 +93,17 @@
     "messagesId": "1565770761023652022",
     "commandPrefix": "!"
   },
-
   "bot": {
-    "prefix": ["ba:", "bb:", "bn:", "bna:", "bana:", "banana:", "bananabot:", "}"],
+    "prefix": [
+      "ba:",
+      "bb:",
+      "bn:",
+      "bna:",
+      "bana:",
+      "banana:",
+      "bananabot:",
+      "}"
+    ],
     "commandSpy": true,
     "creative": true,
     "selfCare": true,
@@ -107,11 +112,10 @@
     "trustedKey": "",
     "adminKey": "",
     "authList": {
-      "admin": ["dfngbrth", "VojtaV12", "Taube"],
+      "admin": [],
       "trusted": []
     }
   },
-
   "core": {
     "enabled": true,
     "hide": true,
@@ -121,14 +125,12 @@
       "size": 10,
       "y": 30
     },
-
     "refill": {
       "enabled": true,
       "block": "repeating_command_block",
       "mode": "replace"
     }
   },
-
   "spawnproof": {
     "enabled": true,
     "region": {
@@ -139,7 +141,6 @@
     },
     "backupOffset": 1000
   },
-
   "logging": {
     "chat": true,
     "commands": true,
