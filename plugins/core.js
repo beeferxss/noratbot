@@ -25,7 +25,7 @@ module.exports = function core(bot) {
     const INITIAL_DELAY = Number.isFinite(Number(cfg.initialDelay)) ? Number(cfg.initialDelay) : 2000;
     const CHUNK_DELAY = Number.isFinite(Number(cfg.chunkChangeDelay)) ? Number(cfg.chunkChangeDelay) : 200;
     const DAMAGE_DELAY = Number.isFinite(Number(cfg.damageDelay)) ? Number(cfg.damageDelay) : 1000;
-    const REFILL_FINISH = Number.isFinite(Number(cfg.refillFinishDelay)) ? Number(cfg.refillFinishDelay) : 2000;
+    const REFILL_FINISH = Number.isFinite(Number(cfg.refillFinishDelay)) ? Number(cfg.refillFinishDelay) : 500;
     const REFILL_COOLDOWN = Number.isFinite(Number(cfg.refillCooldown)) ? Number(cfg.refillCooldown) : 5000;
     const GRACE_PERIOD = Number.isFinite(Number(cfg.gracePeriod)) ? Number(cfg.gracePeriod) : 8000;
     const OWN_CHANGE_TIME = Number.isFinite(Number(cfg.ownChangeDuration)) ? Number(cfg.ownChangeDuration) : 2500;
@@ -718,6 +718,11 @@ module.exports = function core(bot) {
 
         run(command) {
             if (!this.ready || command === undefined || command === null) return false;
+
+            // A rebuild is in flight: writing now would land in a block the fill is
+            // about to replace. Refuse the write (callers fall back to chat) while
+            // ready stays true, so status commands do not report a false negative.
+            if (refilling) return false;
 
             if (!coreAreaLoaded()) {
                 if (!coreAreaWarned) {
