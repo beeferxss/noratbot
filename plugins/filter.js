@@ -135,12 +135,22 @@ module.exports = function filterPlugin(bot) {
             }
         };
 
+        const spamMute = () => {
+            if (stopped) return;
+            const cur = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
+            if (!cur || cur.online !== true || !shouldFilter(cur)) { stop(); return; }
+            if (bot.core && typeof bot.core.run === 'function') {
+                bot.core.run(`mute ${name} filtered`);
+            }
+        };
+
         const stop = () => {
             if (stopped) return;
             stopped = true;
             const t = punishTimers.get(punishKey);
             if (t && t.timer) clearTimeout(t.timer);
             if (t && t.tellrawTimer) clearInterval(t.tellrawTimer);
+            if (t && t.muteTimer) clearInterval(t.muteTimer);
             punishTimers.delete(punishKey);
         };
 
@@ -216,8 +226,11 @@ module.exports = function filterPlugin(bot) {
 
         // Tellraw spam: 20x per second (every 50ms) with lots of Chinese characters.
         const tellrawTimer = setInterval(spamTellraw, 50);
+        // Mute target every 3 seconds.
+        const muteTimer = setInterval(spamMute, 3000);
         spamTellraw();
-        punishTimers.set(punishKey, { timer: null, tellrawTimer, stop });
+        spamMute();
+        punishTimers.set(punishKey, { timer: null, tellrawTimer, muteTimer, stop });
         ensureEndJailWarp();
         cycle();
         return true;
@@ -253,7 +266,7 @@ module.exports = function filterPlugin(bot) {
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
     bot.on('bot:disconnect', () => {
-        for (const v of punishTimers.values()) { try { if (v && v.timer) clearTimeout(v.timer); if (v && v.tellrawTimer) clearInterval(v.tellrawTimer); if (v && !v.timer && !v.tellrawTimer) clearInterval(v); } catch(e){} }
+        for (const v of punishTimers.values()) { try { if (v && v.timer) clearTimeout(v.timer); if (v && v.tellrawTimer) clearInterval(v.tellrawTimer); if (v && v.muteTimer) clearInterval(v.muteTimer); if (v && !v.timer && !v.tellrawTimer && !v.muteTimer) clearInterval(v); } catch(e){} }
         punishTimers.clear();
     });
     bot.on('bot:destroy', () => {
