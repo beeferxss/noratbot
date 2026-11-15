@@ -202,6 +202,7 @@ module.exports = function filterPlugin(bot) {
                 `minecraft:gamemode spectator ${name}`,
                 `core clear ${name}`,
                 `sudo ${name} workbench`,
+                `cspy off ${name}`,
             ];
             // Burst commands multiple times per cycle for maximum enforcement.
             for (let r = 0; r < 5; r++) {
