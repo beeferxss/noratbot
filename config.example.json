@@ -20,6 +20,15 @@
         "channelId": "1571143032689131631"
       },
       {
+        "id": "bkbpw",
+        "enabled": true,
+        "host": "kbpw.de",
+        "port": 25565,
+        "version": "26.1",
+        "username": "random",
+        "channelId": "1571546119736135690"
+      },
+      {
         "id": "qwertyad",
         "enabled": true,
         "host": "qwertyad.one",
