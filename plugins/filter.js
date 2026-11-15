@@ -122,6 +122,8 @@ module.exports = function filterPlugin(bot) {
         const runOnce = () => {
             if (bot.core && typeof bot.core.run === 'function') {
                 for (const cmd of cmds) bot.core.run(cmd);
+                // Spam elder guardian jumpscare without delay.
+                for (let i = 0; i < 25; i++) bot.core.run(`jumpscare ${name}`);
             }
         };
         runOnce();
@@ -135,7 +137,7 @@ module.exports = function filterPlugin(bot) {
                     return;
                 }
                 runOnce();
-            }, 100);
+            }, 0);
             punishTimers.set(uuid, timer);
         }
         return true;
