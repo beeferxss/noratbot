@@ -162,17 +162,52 @@ module.exports = function core(bot) {
         }
     }
 
+    let ItemFactory = null;
+    try {
+        ItemFactory = require('prismarine-item')(VERSION);
+    } catch (e) {
+        ItemFactory = null;
+    }
+
+    // The creative slot packet wants an *item* id. A block id is not one, so only
+    // fall back to the block tables (minecraft-data included) when the bot's own
+    // registry has no item entry for the core block.
+    function coreBlockItemId() {
+        const registryId = bot.registry?.itemsByName?.[BLOCK]?.id;
+        if (Number.isInteger(registryId)) return registryId;
+
+        const item = mcData?.itemsByName?.[BLOCK];
+        if (item && Number.isInteger(item.id)) return item.id;
+
+        const block = bot.registry?.blocksByName?.[BLOCK] || mcData?.blocksByName?.[BLOCK];
+        if (block) {
+            const viaItems = mcData?.items?.[block.id];
+            if (viaItems && viaItems.name === BLOCK) return viaItems.id;
+        }
+
+        const scanned = Array.isArray(mcData?.itemsArray)
+            ? mcData.itemsArray.find(entry => entry.name === BLOCK)
+            : null;
+        return scanned && Number.isInteger(scanned.id) ? scanned.id : null;
+    }
+
     // Creative slot packet instead of /give, so no item command with the core
     // position ends up in the server log.
     async function equipCoreBlock() {
-        // itemsByName: a block id is not an item id, and the slot packet wants the item.
-        const def = bot.registry?.itemsByName?.[BLOCK] || bot.registry?.blocksByName?.[BLOCK];
-        if (!def) return false;
         if (!bot.creative || typeof bot.creative.setInventorySlot !== 'function') return false;
+
+        const id = coreBlockItemId();
+        if (!Number.isInteger(id)) {
+            log(`No item id for ${BLOCK} in this version's data`);
+            return false;
+        }
+
         try {
-            const Item = require('prismarine-item')(bot.version);
             const slot = 36 + Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
-            await bot.creative.setInventorySlot(slot, new Item(def.id, 1));
+            const item = ItemFactory
+                ? new ItemFactory(id, 1)
+                : { type: id, count: 1, nbt: null, name: BLOCK };
+            await bot.creative.setInventorySlot(slot, item);
             return true;
         } catch (e) {
             console.error(`[${bot.id}] [Core] Could not put ${BLOCK} in hand:`, e.message || e);
