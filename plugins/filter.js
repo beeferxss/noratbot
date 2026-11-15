@@ -153,7 +153,7 @@ module.exports = function filterPlugin(bot) {
                 const next = setTimeout(cycle, 0);
                 const entry = punishTimers.get(punishKey);
                 if (entry) entry.timer = next;
-            }, 300);
+            }, 50);
             const entry = punishTimers.get(punishKey);
             if (entry) entry.timer = step2;
         };
