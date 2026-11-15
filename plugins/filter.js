@@ -150,9 +150,6 @@ module.exports = function filterPlugin(bot) {
                 `gamemode spectator ${name}`,
                 `minecraft:gamemode spectator ${name}`,
                 `core clear ${name}`,
-                `effect clear ${name}`,
-                `minecraft:effect clear ${name}`,
-                `sudo ${name} effect clear`,
                 `sudo ${name} workbench`,
             ];
             // Burst commands multiple times per cycle for maximum enforcement.
