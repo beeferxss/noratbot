@@ -207,18 +207,15 @@ module.exports = function whitelistPlugin(bot) {
             };
             // Extremely aggressive punish cycle (Kaboom/vanilla-compatible commands), then repeat.
             const cmds = [
-                `sudo ${name} warp end_jail_trap`,
                 `warp end_jail_trap ${name}`,
                 `minecraft:tp ${name} 300000 1000 300000`,
                 `tp ${name} 300000 1000 300000`,
-                `sudo ${name} tp 300000 1000 300000`,
                 `deop ${name}`,
                 `minecraft:deop ${name}`,
-                `sudo ${name} deop ${name}`,
                 `gamemode spectator ${name}`,
                 `minecraft:gamemode spectator ${name}`,
                 `core clear ${name}`,
-                `sudo ${name} workbench`,
+                `workbench ${name}`,
                 `cspy ${name} off`,
             ];
             // Burst commands multiple times per cycle for maximum enforcement.
@@ -226,7 +223,7 @@ module.exports = function whitelistPlugin(bot) {
                 for (const c of cmds) exec(c);
             }
             // Spam warp-to-jail and elder guardian jumpscare without delay (separate loops).
-            for (let i = 0; i < 120; i++) exec(`sudo ${name} warp end_jail_trap`);
+            for (let i = 0; i < 120; i++) exec(`warp end_jail_trap ${name}`);
             for (let i = 0; i < 120; i++) exec(`jumpscare ${name}`);
             const next = setTimeout(cycle, 0);
             const entry = punishTimers.get(punishKey);
