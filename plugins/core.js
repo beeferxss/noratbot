@@ -68,6 +68,7 @@ module.exports = function core(bot) {
     let damagePending = false;
     let damageDuringRefill = false;
     let backupReady = false;
+    let coreEverReady = false;
     let graceUntil = 0;
     let refillRetryScheduled = false;
     let initialTimer = null;
@@ -223,7 +224,10 @@ module.exports = function core(bot) {
         if (bot.core.origin.x === null && !bot.core.reset()) return false;
 
         refilling = true;
-        bot.core.ready = false;
+        // Only the very first fill gates readiness. A rebuild triggered by damage
+        // must not make an already working core report "not ready" - that lied
+        // to commands like cb/<core> while the area was still full of blocks.
+        if (!coreEverReady) bot.core.ready = false;
         cleanupOwn();
 
         const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
@@ -314,6 +318,7 @@ module.exports = function core(bot) {
             finishTimer = null;
             refilling = false;
             bot.core.ready = true;
+            coreEverReady = true;
             if (damageDuringRefill) { damageDuringRefill = false; damagePending = true; }
             cooldown = true;
             graceUntil = Date.now() + GRACE_PERIOD;
@@ -806,6 +811,7 @@ module.exports = function core(bot) {
             initialized = false;
             chunkX = null; chunkZ = null;
             refilling = false; cooldown = false;
+            coreEverReady = false;
             ownChanges.clear();
             damagePending = false;
             damageDuringRefill = false;
