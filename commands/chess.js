@@ -429,7 +429,7 @@ function flattenTokens(v, out = [], depth = 0) {
 function parseInput(ctx) {
   const fields = ['args', 'arguments', 'argv', 'params', 'parameters', 'rawArgs', 'input', 'text', 'message', 'content', 'raw'];
   const candidates = fields.map((f) => ctx[f]).filter((v) => v != null);
-  const isCommandWord = (s) => /^\S*chess$/i.test(s); // "chess", "nr:chess", "!chess"
+  const isCommandWord = (s) => /^\S*chess$/i.test(s); // "chess", "ba:chess", "!chess"
 
   let leftovers = [];
   for (const c of candidates) {

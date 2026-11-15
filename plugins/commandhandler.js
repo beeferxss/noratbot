@@ -18,7 +18,7 @@ module.exports = function commandHandler(bot) {
         if (Array.isArray(cfg.prefixes)) return cfg.prefixes.filter(p => typeof p === 'string' && p.length > 0);
         if (Array.isArray(cfg.prefix)) return cfg.prefix.filter(p => typeof p === 'string' && p.length > 0);
         if (typeof cfg.prefix === 'string' && cfg.prefix.length > 0) return [cfg.prefix];
-        return ['nr:'];
+        return ['ba:'];
     })();
 
     const logSettings = bot.globalConfig?.logging || {};
@@ -166,7 +166,7 @@ async function exec(cmdName, args, raw, msg, player) {
     const cmd = registry.get(String(cmdName).toLowerCase());
     if (!cmd) {
         if (player) {
-            const prefix = prefixes[0] || 'nr:';
+            const prefix = prefixes[0] || 'ba:';
             const helpCmd = `${prefix}help`;
             const msg = `Command not found. Try ${helpCmd}.`;
             if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
@@ -232,7 +232,7 @@ async function exec(cmdName, args, raw, msg, player) {
         args,
         raw,
         message: msg,
-        prefix: player.usedPrefix || prefixes[0] || 'nr:',
+        prefix: player.usedPrefix || prefixes[0] || 'ba:',
         level: currentLevel,
         source: isConsole ? 'console' : 'chat',
         levels: LVL,
@@ -309,7 +309,7 @@ async function exec(cmdName, args, raw, msg, player) {
         if (!hasPrefix) return;
 
 
-        const used = player.usedPrefix || prefixes[0] || 'nr:';
+        const used = player.usedPrefix || prefixes[0] || 'ba:';
         const raw = cmdText.slice(used.length).trim();
         if (!raw) return;
 
@@ -401,7 +401,7 @@ async function exec(cmdName, args, raw, msg, player) {
 		},
         execute: exec,
         executeConsole(commandName, args = []) {
-            const name = String(commandName || '').replace(/^\.+/, '').replace(/^nr:/i, '');
+            const name = String(commandName || '').replace(/^\.+/, '').replace(/^ba:/i, '');
             if (!name) return false;
             const list = Array.isArray(args) ? args.map(String) : String(args).trim().split(/\s+/).filter(Boolean);
             return exec(name, list, [name, ...list].join(' '), `[console] ${name}`, {

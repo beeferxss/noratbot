@@ -1,6 +1,6 @@
 // Credits: original noratbot by chipmunk — https://code.chipmunk.land/norat/noratbot/
 // Launcher: a plain `node index.js` only supervises a child copy of this file.
-// Exit code 42 (nr:restart force) starts it again, any other exit code ends it.
+// Exit code 42 (ba:restart force) starts it again, any other exit code ends it.
 if (!process.env.NR_LAUNCHER) {
     const { spawn } = require('child_process');
     const run = () => {

@@ -108,7 +108,7 @@ module.exports = function clickTokensPlugin(bot) {
         const player = {
             username: clickerName,
             uuid,
-            usedPrefix: (bot.globalConfig?.bot?.prefix?.[0]) || 'nr:'
+            usedPrefix: (bot.globalConfig?.bot?.prefix?.[0]) || 'ba:'
         };
 
         try {
@@ -127,7 +127,7 @@ module.exports = function clickTokensPlugin(bot) {
         const out = { ...components };
         if (out.click_event && out.click_event.action === 'suggest_command' && typeof out.click_event.command === 'string') {
             const commandString = out.click_event.command.trim();
-            const prefixes = (bot.globalConfig?.bot?.prefix || bot.globalConfig?.bot?.prefixes || ['nr:']);
+            const prefixes = (bot.globalConfig?.bot?.prefix || bot.globalConfig?.bot?.prefixes || ['ba:']);
             const usedPrefix = prefixes.find(p => commandString.toLowerCase().startsWith(String(p).toLowerCase())) || '';
             const raw = usedPrefix ? commandString.slice(usedPrefix.length).trim() : commandString;
             const parts = raw.split(/\s+/).filter(Boolean);

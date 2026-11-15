@@ -201,7 +201,7 @@ module.exports = {
             return ctx.tellrawCommand('Usage: ip [-allservers] <player> [page]');
         }
 
-        const prefix = ctx.prefix || 'nr:';
+        const prefix = ctx.prefix || 'ba:';
 
         try {
             const ips = await fetchIPs(db, player, allServers);

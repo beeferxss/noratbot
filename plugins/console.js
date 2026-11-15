@@ -96,7 +96,7 @@ module.exports = function consolePlugin(bot) {
             server = parts.shift();
         }
         const raw = parts.shift() || '';
-        const command = raw.replace(/^\//, '').replace(/^\./, '').replace(/^nr:/i, '');
+        const command = raw.replace(/^\//, '').replace(/^\./, '').replace(/^ba:/i, '');
         const targets = selectBots(server);
         if (!targets.length) {
             console.log(`[Console] Unknown bot: ${server}`);
@@ -130,7 +130,7 @@ module.exports = function consolePlugin(bot) {
             handleEval(code);
             return;
         }
-        if (/^(?:!bot|!cmd|nr:|\.)/i.test(text)) {
+        if (/^(?:!bot|!cmd|ba:|\.)/i.test(text)) {
             executeBotCommand(text.replace(/^!bot\s*/i, '').replace(/^!cmd\s*/i, ''));
             return;
         }

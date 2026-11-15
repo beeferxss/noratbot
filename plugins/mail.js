@@ -127,7 +127,7 @@ module.exports = function mailPlugin(bot) {
             color: '#62d66b',
             click_event: {
                 action: 'suggest_command',
-                command: 'nr:mail read'
+                command: 'ba:mail read'
             },
             hover_event: {
                 action: 'show_text',
@@ -141,7 +141,7 @@ module.exports = function mailPlugin(bot) {
             color: '#ff6b6b',
             click_event: {
                 action: 'suggest_command',
-                command: 'nr:mail clear'
+                command: 'ba:mail clear'
             },
             hover_event: {
                 action: 'show_text',

@@ -98,7 +98,7 @@
   },
 
   "bot": {
-    "prefix": ["nr:", "norat:", "bananabot:", "no:", "nrb:", "nb:", "nr;", "norat;", "bananabot;", "no;", "nrb;", "nb;", "."],
+    "prefix": ["ba:", "bb:", "bn:", "bna:", "bana:", "banana:", "bananabot:"],
     "commandSpy": true,
     "creative": true,
     "selfCare": true,

@@ -43,7 +43,7 @@ module.exports = function validator(bot) {
 
         const prefixes = Array.isArray(bot.globalConfig?.bot?.prefix) 
             ? bot.globalConfig.bot.prefix 
-            : (bot.globalConfig?.bot?.prefix ? [bot.globalConfig.bot.prefix] : ['nr:']);
+            : (bot.globalConfig?.bot?.prefix ? [bot.globalConfig.bot.prefix] : ['ba:']);
         let rest = null;
         for (const p of prefixes) {
             const idx = clean.toLowerCase().indexOf(p.toLowerCase());

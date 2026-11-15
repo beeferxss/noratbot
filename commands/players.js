@@ -92,7 +92,7 @@ module.exports = {
                         for (const letterComponent of nameGrad) {
                 letterComponent.click_event = {
                     action: 'suggest_command',
-                    command: `nr:ip ${name}`
+                    command: `ba:ip ${name}`
                 };
                 letterComponent.hover_event = {
                     action: 'show_text',
@@ -118,7 +118,7 @@ module.exports = {
         }
         if (totalPages > 1) {
             if (page > 1) {
-                const prevCmd = `nr:players ${page - 1}${serverId ? ' ' + serverId : ''}`;
+                const prevCmd = `ba:players ${page - 1}${serverId ? ' ' + serverId : ''}`;
                 components.push({
                     text: '◀ ',
                     color: '#55aaff',
@@ -139,7 +139,7 @@ module.exports = {
             });
 
             if (page < totalPages) {
-                const nextCmd = `nr:players ${page + 1}${serverId ? ' ' + serverId : ''}`;
+                const nextCmd = `ba:players ${page + 1}${serverId ? ' ' + serverId : ''}`;
                 components.push({
                     text: ' ▶',
                     color: '#55aaff',

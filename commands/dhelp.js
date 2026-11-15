@@ -13,7 +13,7 @@ const CATEGORIES = {
     Other: []
 };
 
-const PREFIX = 'nr:';
+const PREFIX = 'ba:';
 
 function categoryOf(cmd) {
     const name = String(cmd.name).toLowerCase();

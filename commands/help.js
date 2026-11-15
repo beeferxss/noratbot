@@ -1,6 +1,6 @@
 const gradient = require('../utils/gradient');
 
-const PREFIX = 'nr:';
+const PREFIX = 'ba:';
 
 const LEVELS = {
     0: { name: 'Public', color: '#55aaff' },

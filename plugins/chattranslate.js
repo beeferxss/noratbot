@@ -131,7 +131,7 @@ module.exports = function chatTranslatePlugin(bot) {
         const cfg = bot.globalConfig?.bot || {};
         const raw = Array.isArray(cfg.prefixes) ? cfg.prefixes
             : Array.isArray(cfg.prefix) ? cfg.prefix
-            : [cfg.prefix || 'nr:'];
+            : [cfg.prefix || 'ba:'];
         return raw.filter(p => typeof p === 'string' && p.length > 0).map(p => p.toLowerCase());
     }
 
