@@ -45,5 +45,13 @@
         "ips": [],
         "regex": null,
         "mutes": []
+    },
+    "bkbpw": {
+        "enabled": true,
+        "players": [],
+        "uuids": [],
+        "ips": [],
+        "regex": null,
+        "mutes": []
     }
 }
