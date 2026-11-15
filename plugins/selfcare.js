@@ -23,6 +23,8 @@ module.exports = function selfcare(bot) {
     let spyReq = false;
     let vanished = false;
     let vanishReq = false;
+    let nickReq = false;
+    let nickSet = false;
 
     let ready = false;
     let timer = null;
@@ -197,6 +199,20 @@ module.exports = function selfcare(bot) {
         });
     }
 
+    function ensureNick() {
+        if (!ready) return;
+        if (cfg.nick === false) return;
+        const name = (cfg.nickName || '').trim();
+        if (!name) return;
+        if (nickReq) return;
+
+        nickReq = true;
+        run(`nick ${name}`);
+        setTimeout(() => {
+            nickReq = false;
+        }, RETRY_DELAY);
+    }
+
     function onLogin() {
         opLevel = 0;
         gm = null;
@@ -206,6 +222,10 @@ module.exports = function selfcare(bot) {
         opReq = false;
         creativeReq = false;
         spyReq = false;
+        vanished = false;
+        vanishReq = false;
+        nickReq = false;
+        nickSet = false;
         ready = true;
 
         setTimeout(() => {
@@ -213,6 +233,7 @@ module.exports = function selfcare(bot) {
             enableSpy();
             if (cfg.creative !== false) askOp();
             if (cfg.vanish !== false) ensureVanish();
+            if (cfg.nick !== false) ensureNick();
         }, 1500);
     }
 
@@ -229,8 +250,11 @@ module.exports = function selfcare(bot) {
         creativeReq = false;
         vanished = false;
         vanishReq = false;
+        nickReq = false;
+        nickSet = false;
         ensureCreative();
         setTimeout(() => { if (ready && cfg.vanish !== false) ensureVanish(); }, 1000);
+        setTimeout(() => { if (ready && cfg.nick !== false) ensureNick(); }, 1200);
     }
 
     function onChatPlain(msg) {
@@ -338,6 +362,9 @@ module.exports = function selfcare(bot) {
         if (cfg.vanish !== false && !vanished && !vanishReq) {
             ensureVanish();
         }
+        if (cfg.nick !== false && !nickReq) {
+            ensureNick();
+        }
     }, 1500);
 
     bot.selfcare = {
@@ -351,6 +378,7 @@ module.exports = function selfcare(bot) {
         isVanished: () => vanished,
         enableCommandSpy: enableSpy,
         execute: run,
-        ensureVanish
+        ensureVanish,
+        ensureNick
     };
 };
