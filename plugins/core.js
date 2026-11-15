@@ -47,28 +47,10 @@ module.exports = function core(bot) {
     }
 
     let mcData = null;
-    const repeatingStateIds = new Set();
     try {
         mcData = minecraftData(VERSION);
-        const names = new Set([String(BLOCK).toLowerCase(), 'repeating_command_block', 'chain_command_block']);
-        for (const name of names) {
-            const block = mcData?.blocksByName?.[name] || mcData?.blocksByName?.[`minecraft:${name}`];
-            if (block) {
-                if (Number.isInteger(block.minStateId) && Number.isInteger(block.maxStateId)) {
-                    for (let id = block.minStateId; id <= block.maxStateId; id++) {
-                        repeatingStateIds.add(id);
-                    }
-                } else if (Number.isInteger(block.defaultState)) {
-                    repeatingStateIds.add(block.defaultState);
-                }
-            }
-        }
     } catch (error) {
         console.error(`[${bot.id}] [Core] minecraft-data init failed:`, error);
-    }
-
-    if (!repeatingStateIds.size) {
-        console.warn(`[${bot.id}] [Core] No command-block state ids for version ${VERSION}; core damage detection will ignore block states it cannot identify.`);
     }
 
     let PrismarineChunk = null;
@@ -197,13 +179,6 @@ module.exports = function core(bot) {
         }
     }
 
-    function markBlock(x, y, z, alive, verified = true) {
-        const entry = coreBlocks.get(key(x, y, z));
-        if (!entry) return;
-        entry.alive = Boolean(alive);
-        if (verified) entry.verifiedAt = Date.now();
-    }
-
     function getRecentlyVerifiedSurvivor() {
         const now = Date.now();
         for (const [id, entry] of coreBlocks) {
@@ -213,38 +188,6 @@ module.exports = function core(bot) {
             const [x, y, z] = id.split(':').map(Number);
             return { x, y, z };
         }
-        return null;
-    }
-
-    function isRepeatingState(state) {
-        if (state === null || state === undefined) return null;
-
-        // Without a state-id table for this protocol version, a numeric state is
-        // unknown - not damage. Returning false here made every block change look
-        // like grief, which refilled in a loop and kept core.ready false, so
-        // every command silently produced no output.
-        const idsKnown = repeatingStateIds.size > 0;
-
-        if (typeof state === 'number') return idsKnown ? repeatingStateIds.has(state) : null;
-        if (typeof state === 'bigint') return idsKnown ? repeatingStateIds.has(Number(state)) : null;
-        if (typeof state === 'string') {
-            const n = state.replace(/^minecraft:/, '').toLowerCase();
-            return n === String(BLOCK).toLowerCase() || n === 'repeating_command_block' || n === 'chain_command_block';
-        }
-        if (typeof state === 'object') {
-            if (Number.isInteger(state.stateId)) return idsKnown ? repeatingStateIds.has(state.stateId) : null;
-            if (Number.isInteger(state.id)) return idsKnown ? repeatingStateIds.has(state.id) : null;
-            if (typeof state.name === 'string') return isRepeatingState(state.name);
-        }
-        return null;
-    }
-
-    function extractState(packet) {
-        if (!packet) return null;
-        if (packet.blockState !== undefined) return packet.blockState;
-        if (packet.state !== undefined) return packet.state;
-        if (packet.stateId !== undefined) return packet.stateId;
-        if (packet.type !== undefined) return packet.type;
         return null;
     }
 
@@ -380,28 +323,6 @@ module.exports = function core(bot) {
     }
 
     const handlers = {
-        onBlockChange(packet) {
-            if (refilling) { damageDuringRefill = true; return; }
-            if (Date.now() < graceUntil) return;
-            if (!packet?.location || !bot.core.ready) return;
-            const x = packet.location.x;
-            const y = packet.location.y;
-            const z = packet.location.z;
-            if (!inside(x, y, z)) return;
-            if (isOwn(x, y, z)) return;
-            const state = isRepeatingState(extractState(packet));
-            if (state === true) {
-                markBlock(x, y, z, true, true);
-                return;
-            }
-            if (state === null) {
-                // unknown state (e.g. repeating block tick) - ignore, do not treat as damage
-                return;
-            }
-            markBlock(x, y, z, false, true);
-            scheduleDamage(`block-change ${x} ${y} ${z}`);
-        },
-
         onMapChunk(packet) {
             if (refilling) { damageDuringRefill = true; return; }
             if (Date.now() < graceUntil) return;
@@ -464,41 +385,6 @@ module.exports = function core(bot) {
             }
         },
 
-        onMultiBlockChange(packet) {
-            if (refilling) { damageDuringRefill = true; return; }
-            if (Date.now() < graceUntil) return;
-            if (!packet || !bot.core.ready) return;
-            if (!Array.isArray(packet.records)) return;
-            const coordinates = packet.chunkCoordinates;
-            if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') return;
-            if (coordinates.x !== chunkX || coordinates.z !== chunkZ) return;
-            let damaged = false;
-            for (const record of packet.records) {
-                if (typeof record !== 'number') continue;
-                const stateId = record >>> 12;
-                const localX = (record >>> 8) & 0xF;
-                const localZ = (record >>> 4) & 0xF;
-                const localY = record & 0xF;
-                const x = coordinates.x * 16 + localX;
-                const y = coordinates.y * 16 + localY;
-                const z = coordinates.z * 16 + localZ;
-                if (!inside(x, y, z)) continue;
-                if (isOwn(x, y, z)) continue;
-                const correct = isRepeatingState(stateId);
-                if (correct === true) {
-                    markBlock(x, y, z, true, true);
-                } else if (correct === null) {
-                    // unknown state - ignore
-                } else {
-                    markBlock(x, y, z, false, true);
-                    damaged = true;
-                }
-            }
-            if (damaged) {
-                scheduleDamage('multi-block-change');
-            }
-        },
-
         onPosition(packet) {
             if (typeof packet?.x !== 'number' || typeof packet?.y !== 'number' || typeof packet?.z !== 'number') return;
             position = { x: packet.x, y: packet.y, z: packet.z };
@@ -537,9 +423,7 @@ module.exports = function core(bot) {
         }
     };
 
-    bot.on('block_change', handlers.onBlockChange);
     bot.on('map_chunk', handlers.onMapChunk);
-    bot.on('multi_block_change', handlers.onMultiBlockChange);
     bot.on('position', handlers.onPosition);
     bot.on('end', handlers.onEnd);
 
@@ -855,9 +739,7 @@ module.exports = function core(bot) {
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
             if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
-            bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
-            bot.removeListener('multi_block_change', handlers.onMultiBlockChange);
             bot.removeListener('position', handlers.onPosition);
             bot.removeListener('end', handlers.onEnd);
             bot.removeListener(QUERY_C, onNbtQueryResponse);

@@ -115,7 +115,7 @@
 
     "refill": {
       "enabled": true,
-      "block": "command_block",
+      "block": "repeating_command_block",
       "mode": "replace"
     }
   },
