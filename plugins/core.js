@@ -53,6 +53,27 @@ module.exports = function core(bot) {
         console.error(`[${bot.id}] [Core] minecraft-data init failed:`, error);
     }
 
+    // ViaVersion translates between the bot's client protocol and the server's
+    // native version, so item ids have to come from the version the bot actually
+    // speaks - a config that names the server version (or a snapshot) would
+    // otherwise leave us without data tables.
+    function dataVersion() {
+        return bot.registry?.version?.minecraftVersion || bot.version || VERSION;
+    }
+
+    const dataCache = new Map();
+    function dataFor(version) {
+        if (dataCache.has(version)) return dataCache.get(version);
+        let data = null;
+        try {
+            data = minecraftData(version);
+        } catch (e) {
+            data = null;
+        }
+        dataCache.set(version, data);
+        return data;
+    }
+
     let PrismarineChunk = null;
     try {
         PrismarineChunk = require('prismarine-chunk')(VERSION);
@@ -163,10 +184,16 @@ module.exports = function core(bot) {
     }
 
     let ItemFactory = null;
-    try {
-        ItemFactory = require('prismarine-item')(VERSION);
-    } catch (e) {
-        ItemFactory = null;
+    let ItemFactoryVersion = null;
+    function itemFactory(version) {
+        if (ItemFactory && ItemFactoryVersion === version) return ItemFactory;
+        try {
+            ItemFactory = require('prismarine-item')(version);
+            ItemFactoryVersion = version;
+            return ItemFactory;
+        } catch (e) {
+            return null;
+        }
     }
 
     // The creative slot packet wants an *item* id. A block id is not one, so only
@@ -176,17 +203,19 @@ module.exports = function core(bot) {
         const registryId = bot.registry?.itemsByName?.[BLOCK]?.id;
         if (Number.isInteger(registryId)) return registryId;
 
-        const item = mcData?.itemsByName?.[BLOCK];
+        const data = dataFor(dataVersion()) || mcData;
+
+        const item = data?.itemsByName?.[BLOCK];
         if (item && Number.isInteger(item.id)) return item.id;
 
-        const block = bot.registry?.blocksByName?.[BLOCK] || mcData?.blocksByName?.[BLOCK];
+        const block = bot.registry?.blocksByName?.[BLOCK] || data?.blocksByName?.[BLOCK];
         if (block) {
-            const viaItems = mcData?.items?.[block.id];
+            const viaItems = data?.items?.[block.id];
             if (viaItems && viaItems.name === BLOCK) return viaItems.id;
         }
 
-        const scanned = Array.isArray(mcData?.itemsArray)
-            ? mcData.itemsArray.find(entry => entry.name === BLOCK)
+        const scanned = Array.isArray(data?.itemsArray)
+            ? data.itemsArray.find(entry => entry.name === BLOCK)
             : null;
         return scanned && Number.isInteger(scanned.id) ? scanned.id : null;
     }
@@ -204,8 +233,9 @@ module.exports = function core(bot) {
 
         try {
             const slot = 36 + Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
-            const item = ItemFactory
-                ? new ItemFactory(id, 1)
+            const Factory = itemFactory(dataVersion());
+            const item = Factory
+                ? new Factory(id, 1)
                 : { type: id, count: 1, nbt: null, name: BLOCK };
             await bot.creative.setInventorySlot(slot, item);
             return true;
