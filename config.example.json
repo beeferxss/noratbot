@@ -80,7 +80,10 @@
     "refreshMinutes": 20,
     "failureCooldownMinutes": 15,
     "connectTimeout": 8000,
-    "maxListSize": 4000
+    "maxListSize": 4000,
+    "probeTimeout": 3000,
+    "probeCandidates": 6,
+    "fallbackDirect": true
   },
 
   "discord": {

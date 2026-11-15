@@ -6,7 +6,6 @@ const dns = require('dns');
 const { SocksClient } = require('socks');
 const proxies = require('../utils/proxies');
 
-const PROXY_CONNECT_TIMEOUT = 8000;
 function formatDisconnectReason(reason) {
     if (!reason) return 'Unknown reason';
     if (typeof reason === 'string') return reason;
@@ -96,6 +95,10 @@ class BotInstance extends EventEmitter {
         this.proxyPool = proxies.forConfig(this.globalConfig);
         this.proxy = null;
         this._proxyBootstrapTried = false;
+        this._pendingTunnelSocket = null;
+        this.probeTimeout = Math.min(15000, Math.max(500, Number(this.globalConfig?.proxy?.probeTimeout) || 3000));
+        this.probeCandidates = Math.min(25, Math.max(1, Number(this.globalConfig?.proxy?.probeCandidates) || 6));
+        this.fallbackDirect = this.globalConfig?.proxy?.fallbackDirect !== false;
     }
 
     log(message) {
@@ -134,7 +137,23 @@ class BotInstance extends EventEmitter {
             await this.stop();
         }
 
-        const proxy = await this.resolveWorkingProxy();
+        let tunnel = null;
+        try {
+            tunnel = await this.acquireProxyTunnel();
+        } catch (error) {
+            console.error(`[${this.id}] ${error.message}`);
+            this.emit('bot:error', error);
+            this._connecting = false;
+            this.scheduleReconnect();
+            return;
+        }
+
+        if (this.destroyed) {
+            if (tunnel) tunnel.socket.destroy();
+            this._connecting = false;
+            return;
+        }
+
         const options = {
             host: config.host,
             port: Number(config.port),
@@ -143,11 +162,18 @@ class BotInstance extends EventEmitter {
             auth: config.auth || 'offline'
         };
 
-        if (proxy) {
+        if (tunnel) {
+            const { proxy, socket } = tunnel;
+            this._pendingTunnelSocket = socket;
             options.connect = client => {
-                this.openProxyTunnel(client, proxy, options).catch(error => {
-                    this.handleProxyFailure(client, proxy, error);
-                });
+                this._pendingTunnelSocket = null;
+                if (this.client && this.client !== client) {
+                    socket.destroy();
+                    return;
+                }
+                this.log(`Connected through ${proxy.host}:${proxy.port}`);
+                client.setSocket(socket);
+                client.emit('connect');
             };
         }
 
@@ -155,6 +181,8 @@ class BotInstance extends EventEmitter {
         try {
             client = mc.createClient(options);
         } catch (error) {
+            if (tunnel) tunnel.socket.destroy();
+            this._pendingTunnelSocket = null;
             this.emit('bot:error', error);
             this._connecting = false;
             this.scheduleReconnect();
@@ -170,127 +198,109 @@ class BotInstance extends EventEmitter {
         this.attachClientEvents();
     }
 
-    async resolveWorkingProxy() {
+    fixedProxyFromConfig() {
         const setting = this.config.proxy;
-
-        const fixedProxy = (typeof setting === 'string')
-            ? proxies.parseProxy(setting)
-            : (setting && typeof setting === 'object' && setting.host)
-                ? (() => {
-                    const p = proxies.parseProxy(`${setting.host}:${setting.port}`);
-                    if (p) {
-                        if (setting.userId) p.userId = String(setting.userId);
-                        if (setting.password) p.password = String(setting.password);
-                    }
-                    return p;
-                })()
-                : null;
-
-        if (setting === false) return null;
-        if (fixedProxy) {
-            if (!fixedProxy) return null;
-            const ok = await this.probeProxy(fixedProxy);
-            if (ok) return fixedProxy;
-            console.error(`[${this.id}] Fixed proxy ${fixedProxy.host}:${fixedProxy.port} failed pre-check`);
-            return null;
-        }
-
-        if (!this.proxyPool) return null;
-
-        if (this.proxy) return this.proxy;
-
-        const candidate = this.proxyPool.pick();
-        if (!candidate) return null;
-        this.proxy = candidate;
-        return candidate;
-    }
-
-    async probeProxy(proxy, destination) {
-        if (!proxy) return false;
-        if (!destination) {
-            destination = await this.resolveDestination(this.config.host, Number(this.config.port));
-        }
-        try {
-            const { socket } = await SocksClient.createConnection({
-                proxy: { host: proxy.host, port: proxy.port, type: 5, userId: proxy.userId, password: proxy.password },
-                command: 'connect',
-                destination,
-                timeout: 3000
-            });
-            socket.destroy();
-            return true;
-        } catch (e) {
-            return false;
-        }
-    }
-
-    resolveProxy() {
-        const setting = this.config.proxy;
-        if (setting === false) return null;
+        if (!setting || setting === false) return null;
 
         if (typeof setting === 'string') {
-            const fixed = proxies.parseProxy(setting);
-            if (fixed) return fixed;
-            console.error(`[${this.id}] Invalid proxy config: ${setting}`);
-            return null;
+            const parsed = proxies.parseProxy(setting);
+            if (!parsed) console.error(`[${this.id}] Invalid proxy config: ${setting}`);
+            return parsed;
         }
 
-        if (setting && typeof setting === 'object' && setting.host) {
-            const fixed = proxies.parseProxy(`${setting.host}:${setting.port}`);
-            if (fixed) {
-                if (setting.userId) fixed.userId = String(setting.userId);
-                if (setting.password) fixed.password = String(setting.password);
-                return fixed;
+        if (typeof setting === 'object' && setting.host) {
+            const parsed = proxies.parseProxy(`${setting.host}:${setting.port}`);
+            if (!parsed) {
+                console.error(`[${this.id}] Invalid proxy config`);
+                return null;
             }
-            console.error(`[${this.id}] Invalid proxy config`);
+            if (setting.userId) parsed.userId = String(setting.userId);
+            if (setting.password) parsed.password = String(setting.password);
+            return parsed;
+        }
+
+        return null;
+    }
+
+    async probeSocket(proxy, destination, timeout) {
+        try {
+            const { socket } = await SocksClient.createConnection({
+                proxy: {
+                    host: proxy.host,
+                    port: proxy.port,
+                    type: 5,
+                    userId: proxy.userId,
+                    password: proxy.password
+                },
+                command: 'connect',
+                destination,
+                timeout
+            });
+            return { socket };
+        } catch (error) {
+            return { error: error.code || error.message || 'connect failed' };
+        }
+    }
+
+    // Only hand a proxy to a client once it has actually opened a tunnel to the
+    // server. Dead or blackholing pool entries are dropped instead of costing a
+    // full connect cycle every reconnect.
+    async acquireProxyTunnel() {
+        if (this.config.proxy === false) return null;
+
+        const destination = await this.proxyDestination();
+
+        const fixed = this.fixedProxyFromConfig();
+        if (fixed) {
+            const { socket } = await this.probeSocket(fixed, destination, this.probeTimeout);
+            if (socket) return { proxy: fixed, socket };
+            console.error(`[${this.id}] Fixed proxy ${fixed.host}:${fixed.port} failed pre-check`);
+            if (!this.fallbackDirect) throw new Error(`proxy ${fixed.host}:${fixed.port} is not reachable`);
             return null;
         }
 
         if (!this.proxyPool) return null;
-        if (!this.proxy) this.proxy = this.proxyPool.pick();
-        return this.proxy;
+
+        const tried = new Set();
+        let lastError = 'no candidate in pool';
+        for (let i = 0; i < this.probeCandidates; i++) {
+            const candidate = this.proxyPool.pick();
+            if (!candidate) break;
+            const key = `${candidate.host}:${candidate.port}`;
+            if (tried.has(key)) {
+                this.proxyPool.markFailed(candidate);
+                continue;
+            }
+            tried.add(key);
+            const { socket, error } = await this.probeSocket(candidate, destination, this.probeTimeout);
+            if (socket) {
+                this.proxy = candidate;
+                this.proxyPool.markGood(candidate);
+                this.log(`Proxy ${key} tunnelled to ${destination.host}:${destination.port} after ${tried.size} attempt(s)`);
+                return { proxy: candidate, socket };
+            }
+            lastError = error;
+            this.proxyPool.markFailed(candidate);
+        }
+
+        this.proxy = null;
+        console.error(`[${this.id}] No working proxy (${tried.size} tried, last ${lastError}); ${this.fallbackDirect ? 'connecting directly' : 'retrying later'}`);
+        if (!this.fallbackDirect) throw new Error('no working proxy available');
+        return null;
     }
 
-    handleProxyFailure(client, proxy, error) {
-        if (this.client !== client) return;
-        if (this.proxyPool) this.proxyPool.markFailed(proxy);
-        if (this.proxy === proxy) this.proxy = null;
-        this.emit('bot:error', error);
-        console.error(`[${this.id}] Proxy ${proxy.host}:${proxy.port} failed:`, error.message || error);
-
-        client.removeAllListeners();
-        this.client = null;
-        this.bot = null;
-        this.ready = false;
-        this.started = false;
-        this._connecting = false;
-        this.emit('bot:disconnect', `proxy ${proxy.host}:${proxy.port} failed`);
-        if (this.globalConfig?.minecraft?.connection?.autoReconnect !== false && !this.destroyed) {
-            this.scheduleReconnect();
+    async proxyDestination() {
+        const destination = await this.resolveDestination(this.config.host, Number(this.config.port));
+        if (/^[0-9a-f:.]+$/i.test(destination.host)) return destination;
+        try {
+            const addresses = await dns.promises.lookup(destination.host);
+            if (addresses && addresses.address) {
+                return { host: addresses.address, port: destination.port };
+            }
+        } catch (e) {
+            // Leave the hostname in place; some proxies resolve names remotely.
         }
-    }
-
-    async openProxyTunnel(client, proxy, options) {
-        const destination = await this.resolveDestination(options.host, options.port);
-        const { socket } = await SocksClient.createConnection({
-            proxy: {
-                host: proxy.host,
-                port: proxy.port,
-                type: 5,
-                userId: proxy.userId,
-                password: proxy.password
-            },
-            command: 'connect',
-            destination,
-            timeout: PROXY_CONNECT_TIMEOUT
-        });
-        if (this.client && this.client !== client) {
-            socket.destroy();
-            return;
-        }
-        this.log(`Connected through ${proxy.host}:${proxy.port}`);
-        client.setSocket(socket);
-        client.emit('connect');
+        return destination;
     }
 
     resolveDestination(host, port) {
@@ -494,6 +504,10 @@ class BotInstance extends EventEmitter {
             } catch (error) {
                 this.emit('bot:error', error);
             }
+        }
+        if (this._pendingTunnelSocket) {
+            this._pendingTunnelSocket.destroy();
+            this._pendingTunnelSocket = null;
         }
         this.client = null;
         this.bot = null;

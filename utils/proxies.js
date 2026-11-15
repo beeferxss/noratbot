@@ -167,7 +167,11 @@ class ProxyPool {
         }
         const usable = this.list.filter(p => !this.failed.has(keyOf(p)));
         if (!usable.length) return null;
-        return usable[Math.floor(Math.random() * usable.length)];
+        // Reuse a proxy that has already worked instead of re-rolling the dice
+        // on every reconnect; it drops out again as soon as it fails a probe.
+        const good = usable.filter(p => this.good.has(keyOf(p)));
+        const pool = good.length ? good : usable;
+        return pool[Math.floor(Math.random() * pool.length)];
     }
 
     markFailed(proxy) {
