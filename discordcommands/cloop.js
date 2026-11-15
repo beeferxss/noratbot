@@ -35,7 +35,7 @@ module.exports = {
             if (target.core && typeof target.core.run === 'function') {
                 try {
                     const grad = require('../utils/gradient');
-                    const comps = grad.gradient(`bananabot - ${text}`, '#f4fcff', '#238bff');
+                    const comps = grad.gradient(`wOmEn bOt ~♡~ ${text}`, '#f4fcff', '#238bff');
                     target.core.run(`tellraw @a ${JSON.stringify(comps)}`);
                 } catch (_) {}
             }

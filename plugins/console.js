@@ -19,7 +19,7 @@ module.exports = function consolePlugin(bot) {
     }
 
     function tellrawCmd(text) {
-        const formatted = gradText('[bananabot Console] ' + text, '#f4fcff', '#238bff');
+        const formatted = gradText('[wOmEn bOt console~] ' + text, '#f4fcff', '#238bff');
         return bot.core.run(`tellraw @a ${JSON.stringify(formatted)}`);
     }
     const attached = new Set();
@@ -46,7 +46,7 @@ module.exports = function consolePlugin(bot) {
             console.log(`[${target?.id || 'console'}] [Console] Bot is not connected`);
             return;
         }
-        const formatted = gradText('[bananabot Console] ' + msg, '#f4fcff', '#238bff');
+        const formatted = gradText('[wOmEn bOt console~] ' + msg, '#f4fcff', '#238bff');
         target.core?.run?.(`tellraw @a ${JSON.stringify(formatted)}`);
     }
 

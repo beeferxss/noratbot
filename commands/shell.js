@@ -466,7 +466,7 @@ ping() {
     done
 }
 
-printf '\\n\\033[32mBananaBot Linux shell initialized.\\033[0m\\n'
+printf '\\n\\033[32mwOmEn bOt LiNuX shElL ... initialized? maybe lol\\033[0m\\n'
 `;
 
     try {
@@ -541,7 +541,7 @@ class Shell {
         this.mode = mode === 'chat' ? 'chat' : 'textdisplay';
 
         this.displayTag =
-            'BananaBotShell_' +
+            'WomenBotShell_' +
             Math.random().toString(36).slice(2, 10);
 
         this.displayReady = false;
@@ -1032,7 +1032,7 @@ class Shell {
             text: '',
             extra: [
                 {
-                    text: 'BananaBot Linux Shell\n',
+                    text: 'wOmEn bOt LiNuX sHeLl (no boys allowed)\n',
                     color: 'green',
                     bold: true
                 },
@@ -1213,7 +1213,7 @@ async function startShell(ctx, networkEnabled, mode = 'textdisplay') {
 
 module.exports = {
     name: 'shell',
-    description: 'Isolated BananaBot Linux shell',
+    description: 'Isolated wOmEn bOt Linux shell (chaos edition)',
     level: 0,
 
     async execute(ctx) {

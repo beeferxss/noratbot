@@ -1,7 +1,7 @@
 const LEVELS = {
-    0: { name: 'Public', color: '#55aaff' },
-    1: { name: 'Trusted', color: '#ffaa00' },
-    2: { name: 'Admin', color: '#ff6b6b' }
+    0: { name: 'girlies', color: '#ff77cc' },
+    1: { name: 'besties', color: '#ffaa00' },
+    2: { name: 'queen', color: '#ff4fa3' }
 };
 
 const CATEGORIES = {
@@ -13,7 +13,7 @@ const CATEGORIES = {
     Other: []
 };
 
-const PREFIX = 'ba:';
+const PREFIX = 'wb:';
 
 function categoryOf(cmd) {
     const name = String(cmd.name).toLowerCase();
@@ -31,8 +31,8 @@ function sendMenu(ctx) {
     const userLevel = Number(ctx.level ?? 0);
     const out = [];
 
-    out.push({ text: 'Dynamic Help', color: 'white', bold: true });
-    out.push({ text: '\n\nBy Rank:\n', color: 'gray' });
+    out.push({ text: 'wOmEn bOt ☆ dYnaMiC hElP ☆ (stylo chaos)', color: '#ff77cc', bold: true });
+    out.push({ text: '\n\nby vibes/rank??\n', color: 'light_purple' });
 
     for (const lvl of Object.keys(LEVELS).map(Number)) {
         const accessible = userLevel >= lvl;
@@ -41,26 +41,26 @@ function sendMenu(ctx) {
             color: accessible ? LEVELS[lvl].color : 'dark_gray',
             bold: true,
             click_event: accessible ? { action: 'suggest_command', command: `${PREFIX}dhelp rank ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
-            hover_event: { action: 'show_text', value: { text: accessible ? `View ${LEVELS[lvl].name} commands` : 'Requires higher rank', color: accessible ? 'green' : 'red' } }
+            hover_event: { action: 'show_text', value: { text: accessible ? `peek ${LEVELS[lvl].name} stuff` : 'no access babe', color: accessible ? 'light_purple' : 'red' } }
         });
-        out.push({ text: '  ', color: 'gray' });
+        out.push({ text: '  ✿  ', color: 'gray' });
     }
 
-    out.push({ text: '\n\nBy Category:\n', color: 'gray' });
+    out.push({ text: '\n\nby category (kinda)\n', color: 'light_purple' });
     for (const cat of Object.keys(CATEGORIES)) {
         out.push({
             text: cat,
-            color: '#55aaff',
+            color: '#ff99dd',
             bold: true,
             click_event: { action: 'suggest_command', command: `${PREFIX}dhelp cat ${cat.toLowerCase()}` },
-            hover_event: { action: 'show_text', value: { text: `View ${cat} commands`, color: 'green' } }
+            hover_event: { action: 'show_text', value: { text: `open ${cat} idk`, color: 'light_purple' } }
         });
-        out.push({ text: '  ', color: 'gray' });
+        out.push({ text: '  ~  ', color: 'gray' });
     }
 
-    out.push({ text: '\n\nOr type ', color: 'gray' });
-    out.push({ text: `${PREFIX}dhelp <command>`, color: '#55aaff' });
-    out.push({ text: ' for details.', color: 'gray' });
+    out.push({ text: '\n\nor just type ', color: 'gray' });
+    out.push({ text: `${PREFIX}dhelp <thing>`, color: '#ff77cc' });
+    out.push({ text: ' if you can read this lol', color: 'gray' });
 
     ctx.tellraw('@a', { text: '', extra: out });
 }
@@ -71,7 +71,7 @@ function sendRank(ctx, level) {
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     const out = [];
-    out.push({ text: `${LEVELS[level].name} Commands`, color: LEVELS[level].color, bold: true });
+    out.push({ text: `${LEVELS[level].name} stuff`, color: LEVELS[level].color, bold: true });
     out.push({ text: ` (${all.length})\n`, color: 'dark_gray' });
 
     all.forEach((cmd, i) => {
@@ -86,10 +86,10 @@ function sendRank(ctx, level) {
 
     out.push({ text: '\n\n', color: 'gray' });
     out.push({
-        text: '← Back',
-        color: '#55aaff',
+        text: '← go back (somehow)',
+        color: '#ff99dd',
         click_event: { action: 'suggest_command', command: `${PREFIX}dhelp` },
-        hover_event: { action: 'show_text', value: { text: 'Return to categories', color: 'green' } }
+        hover_event: { action: 'show_text', value: { text: 'back to chaos menu', color: 'light_purple' } }
     });
 
     ctx.tellraw('@a', { text: '', extra: out });
@@ -102,13 +102,13 @@ function sendCategory(ctx, catName) {
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     const out = [];
-    out.push({ text: `${target} Commands`, color: '#55aaff', bold: true });
+    out.push({ text: `${target} pile`, color: '#ff77cc', bold: true });
     out.push({ text: ` (${all.length})\n`, color: 'dark_gray' });
 
     all.forEach((cmd, i) => {
         out.push({
             text: cmd.name,
-            color: '#55aaff',
+            color: '#ff99dd',
             click_event: { action: 'suggest_command', command: `${PREFIX}help ${cmd.name}` },
             hover_event: { action: 'show_text', value: { text: usageOf(cmd), color: 'white' } }
         });
@@ -117,10 +117,10 @@ function sendCategory(ctx, catName) {
 
     out.push({ text: '\n\n', color: 'gray' });
     out.push({
-        text: '← Back',
-        color: '#55aaff',
+        text: '← back??',
+        color: '#ff99dd',
         click_event: { action: 'suggest_command', command: `${PREFIX}dhelp` },
-        hover_event: { action: 'show_text', value: { text: 'Return to categories', color: 'green' } }
+        hover_event: { action: 'show_text', value: { text: 'return to chaos', color: 'light_purple' } }
     });
 
     ctx.tellraw('@a', { text: '', extra: out });
@@ -128,8 +128,8 @@ function sendCategory(ctx, catName) {
 
 module.exports = {
     name: 'dhelp',
-    description: 'Dynamic help with clickable ranks and categories',
-    usage: 'dhelp [rank public|trusted|admin | cat <name> | command]',
+    description: 'Dynamic help (women bot chaotic stylo edition)',
+    usage: 'dhelp [rank girlies|besties|queen | cat <name> | command]',
     level: 0,
     aliases: ['dh'],
     async execute(ctx) {
@@ -146,12 +146,12 @@ module.exports = {
             const levelName = (args[1] || '').toLowerCase();
             const level = Object.keys(LEVELS).find(n => LEVELS[n].name.toLowerCase() === levelName);
             if (level === undefined) {
-                ctx.tellrawCommand('Unknown rank.');
+                ctx.tellrawCommand('idk that rank babe');
                 return;
             }
             const userLevel = Number(ctx.level ?? 0);
             if (userLevel < Number(level)) {
-                ctx.tellrawCommand('You do not have access to that rank.');
+                ctx.tellrawCommand('nope not ur vibe level');
                 return;
             }
             sendRank(ctx, Number(level));
@@ -162,26 +162,24 @@ module.exports = {
             const catName = (args[1] || '').toLowerCase();
             const target = Object.keys(CATEGORIES).find(c => c.toLowerCase() === catName);
             if (!target) {
-                ctx.tellrawCommand('Unknown category.');
+                ctx.tellrawCommand('what category even is that??');
                 return;
             }
             sendCategory(ctx, target);
             return;
         }
 
-        // direct rank name
         const level = Object.keys(LEVELS).find(n => LEVELS[n].name.toLowerCase() === first);
         if (level !== undefined) {
             const userLevel = Number(ctx.level ?? 0);
             if (userLevel < Number(level)) {
-                ctx.tellrawCommand('You do not have access to that rank.');
+                ctx.tellrawCommand('nope not ur vibe level');
                 return;
             }
             sendRank(ctx, Number(level));
             return;
         }
 
-        // direct category name
         const cat = Object.keys(CATEGORIES).find(c => c.toLowerCase() === first);
         if (cat) {
             sendCategory(ctx, cat);
@@ -190,10 +188,10 @@ module.exports = {
 
         const cmd = ctx.commands.get(first);
         if (cmd) {
-            ctx.tellrawCommand(`Use ${PREFIX}help ${cmd.name} for details.`);
+            ctx.tellrawCommand(`try ${PREFIX}help ${cmd.name} bestie`);
             return;
         }
 
-        ctx.tellrawCommand(`Unknown "${first}".`);
+        ctx.tellrawCommand(`"${first}"?? never heard of her`);
     }
 };

@@ -95,13 +95,13 @@
   },
   "bot": {
     "prefix": [
-      "ba:",
-      "bb:",
-      "bn:",
-      "bna:",
-      "bana:",
-      "banana:",
-      "bananabot:",
+      "wb:",
+      "w:",
+      "women:",
+      "womenbot:",
+      "girl:",
+      "stylo:",
+      "slay:",
       "}"
     ],
     "commandSpy": true,

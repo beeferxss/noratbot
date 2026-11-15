@@ -212,8 +212,8 @@ async function showIPs(ctx, db, player, allServers, page) {
     page = Math.min(Math.max(1, page || 1), totalPages);
 
     const header = allServers
-        ? `bananabot - IPs of player ${player} (all servers) (${ips.length}) - page ${page}/${totalPages}`
-        : `bananabot - IPs of player ${player} (${ips.length}) - page ${page}/${totalPages}`;
+        ? `wOmEn bOt ~♡~ IPs of player ${player} (all servers) (${ips.length}) - page ${page}/${totalPages}`
+        : `wOmEn bOt ~♡~ IPs of player ${player} (${ips.length}) - page ${page}/${totalPages}`;
     const headerComps = gradient.gradient(header, '#f4fcff', '#238bff');
 
     if (!ips.length) {
@@ -266,7 +266,7 @@ async function showAltsOfIP(ctx, db, targetIP, displayInput, allServers) {
     const raw = await db.findPlayerAlts(targetIP, allServers, LIMIT);
     const alts = normalizeAlts(raw).sort((a, b) => b.time - a.time);
 
-    const header = `bananabot - Alts of IP ${displayInput} (${alts.length})`;
+    const header = `wOmEn bOt ~♡~ Alts of IP ${displayInput} (${alts.length})`;
     const headerComps = gradient.gradient(header, '#f4fcff', '#238bff');
 
     if (!alts.length) {

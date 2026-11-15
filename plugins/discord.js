@@ -978,20 +978,20 @@ async function relayDiscordMessage(bot, message) {
     let suffix = replyTarget ? ` (reply to @${replyTarget}): ${body}` : `: ${body}`;
     if (suffix.length > 500) suffix = suffix.slice(0, 497) + '...';
 
-    const visible = `[bananabot Discord] ${author}${suffix}`;
+    const visible = `[wOmEn bOt discord~] ${author}${suffix}`;
     noteEcho(bot, visible);
 
     const link = bot.globalConfig?.discord?.link || 'https://discord.gg';
 
     const extra = [
         {
-            text: '[bananabot Discord] ',
+            text: '[wOmEn bOt discord~] ',
             color: '#55aaff',
             click_event: { action: 'copy_to_clipboard', value: link },
             hover_event: {
                 action: 'show_text',
                 value: {
-                    text: `bananabot Discord\n\nLink: ${link}`,
+                    text: `wOmEn bOt discord??\n\nlinky link: ${link}`,
                     color: 'aqua'
                 }
             }
@@ -1463,7 +1463,7 @@ function buildMinecraftContext(cmd, invocation) {
     const uuid = bot?.commands?.getPlayerUUID?.(username) || null;
 
     const send = (text, options = {}) => sendOutput(invocation.responder, String(text ?? ''), {
-        title: options.title ?? `${cmd.name} • ${bot?.id || 'bananabot'}`,
+        title: options.title ?? `${cmd.name} • ${bot?.id || 'womenbot'}`,
         color: options.color ?? rankColor(invocation.rank),
         footer: options.footer ?? `${FOOTER} • ${invocation.rank}`
     });
