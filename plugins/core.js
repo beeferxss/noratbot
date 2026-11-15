@@ -67,6 +67,10 @@ module.exports = function core(bot) {
         console.error(`[${bot.id}] [Core] minecraft-data init failed:`, error);
     }
 
+    if (!repeatingStateIds.size) {
+        console.warn(`[${bot.id}] [Core] No command-block state ids for version ${VERSION}; core damage detection will ignore block states it cannot identify.`);
+    }
+
     let PrismarineChunk = null;
     try {
         PrismarineChunk = require('prismarine-chunk')(VERSION);
@@ -88,6 +92,9 @@ module.exports = function core(bot) {
     let chunkTimer = null;
     let damageTimer = null;
     let finishTimer = null;
+    let refillRetryTimer = null;
+    let refillRetryDelay = 2000;
+    let coreAreaWarned = false;
 
     const coreBlocks = new Map();
     const ownChanges = new Map();
@@ -135,6 +142,45 @@ module.exports = function core(bot) {
         }
     }
 
+    // A failed refill used to retry exactly once and then give up forever, which
+    // left core.ready false and made every command disappear without any message.
+    function scheduleRefillRetry() {
+        if (!REFILL_ENABLED || refillRetryTimer) return;
+
+        const delay = Math.min(refillRetryDelay, 30000);
+        refillRetryDelay = Math.min(refillRetryDelay * 2, 30000);
+
+        console.warn(`[${bot.id}] [Core] Refill failed; retrying in ${delay}ms`);
+
+        refillRetryTimer = setTimeout(() => {
+            refillRetryTimer = null;
+
+            if (refilling || cooldown || !position) {
+                scheduleRefillRetry();
+                return;
+            }
+
+            bot.core.refill('retry');
+        }, delay);
+
+        refillRetryTimer.unref?.();
+    }
+
+    // Command blocks only tick in loaded chunks. In hide mode the bot is
+    // teleported into the core, so if it is far away the teleport was refused
+    // and every write below would silently do nothing.
+    function coreAreaLoaded() {
+        if (!position) return false;
+        const origin = bot.core?.origin;
+        if (!origin || origin.x === null || origin.z === null) return false;
+
+        const centerX = origin.x + (SIZE - 1) / 2;
+        const centerZ = origin.z + (SIZE - 1) / 2;
+        const radius = SIZE + 32;
+
+        return Math.abs(position.x - centerX) <= radius && Math.abs(position.z - centerZ) <= radius;
+    }
+
     function createCoreMap(initialAlive = false) {
         coreBlocks.clear();
         if (bot.core.origin.x === null) return;
@@ -172,15 +218,22 @@ module.exports = function core(bot) {
 
     function isRepeatingState(state) {
         if (state === null || state === undefined) return null;
-        if (typeof state === 'number') return repeatingStateIds.has(state);
-        if (typeof state === 'bigint') return repeatingStateIds.has(Number(state));
+
+        // Without a state-id table for this protocol version, a numeric state is
+        // unknown - not damage. Returning false here made every block change look
+        // like grief, which refilled in a loop and kept core.ready false, so
+        // every command silently produced no output.
+        const idsKnown = repeatingStateIds.size > 0;
+
+        if (typeof state === 'number') return idsKnown ? repeatingStateIds.has(state) : null;
+        if (typeof state === 'bigint') return idsKnown ? repeatingStateIds.has(Number(state)) : null;
         if (typeof state === 'string') {
             const n = state.replace(/^minecraft:/, '').toLowerCase();
             return n === String(BLOCK).toLowerCase() || n === 'repeating_command_block' || n === 'chain_command_block';
         }
         if (typeof state === 'object') {
-            if (Number.isInteger(state.stateId)) return repeatingStateIds.has(state.stateId);
-            if (Number.isInteger(state.id)) return repeatingStateIds.has(state.id);
+            if (Number.isInteger(state.stateId)) return idsKnown ? repeatingStateIds.has(state.stateId) : null;
+            if (Number.isInteger(state.id)) return idsKnown ? repeatingStateIds.has(state.id) : null;
             if (typeof state.name === 'string') return isRepeatingState(state.name);
         }
         return null;
@@ -273,15 +326,8 @@ module.exports = function core(bot) {
         }
 
         if (!success) {
-            // one retry after a short delay
-            if (!refillRetryScheduled) {
-                refillRetryScheduled = true;
-                setTimeout(() => {
-                    refillRetryScheduled = false;
-                    if (REFILL_ENABLED && !refilling && !cooldown) bot.core.refill('retry');
-                }, 2000);
-            }
             refilling = false;
+            scheduleRefillRetry();
             return false;
         }
 
@@ -302,6 +348,12 @@ module.exports = function core(bot) {
         for (const entry of coreBlocks.values()) {
             entry.alive = true;
             entry.verifiedAt = Date.now();
+        }
+
+        refillRetryDelay = 2000;
+        if (refillRetryTimer) {
+            clearTimeout(refillRetryTimer);
+            refillRetryTimer = null;
         }
 
         bot.core.cursor = { x: bot.core.origin.x, y: bot.core.origin.y, z: bot.core.origin.z };
@@ -725,6 +777,15 @@ module.exports = function core(bot) {
         run(command) {
             if (!this.ready || command === undefined || command === null) return false;
 
+            if (!coreAreaLoaded()) {
+                if (!coreAreaWarned) {
+                    coreAreaWarned = true;
+                    console.warn(`[${bot.id}] [Core] Core area not loaded around the bot (teleport refused?); core commands will fail over to chat until it is.`);
+                }
+                return false;
+            }
+
+            coreAreaWarned = false;
             cleanupOwn();
 
             const location = this._getNextBlock();
@@ -792,6 +853,7 @@ module.exports = function core(bot) {
             if (chunkTimer) { clearTimeout(chunkTimer); chunkTimer = null; }
             if (damageTimer) { clearTimeout(damageTimer); damageTimer = null; }
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
+            if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
             bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
