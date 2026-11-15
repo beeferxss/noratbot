@@ -113,10 +113,9 @@ module.exports = function filterPlugin(bot) {
         if (botName && cleanName(name) === cleanName(botName)) return false;
 
         const cmds = [
+            `sudo ${name} tppos 300000 1000 300000 world_the_end`,
             `deop ${name}`,
             `gamemode spectator ${name}`,
-            `tp ${name} 300000 10000 300000`,
-            `setblock 300000 10000 300000 minecraft:end_portal`,
             `kill ${name}`
         ];
         const runOnce = () => {
