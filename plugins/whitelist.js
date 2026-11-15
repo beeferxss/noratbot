@@ -129,35 +129,50 @@ module.exports = function whitelistPlugin(bot) {
         const botName = bot.config?.username || bot.username || '';
         if (botName && cleanName(name) === cleanName(botName)) return false;
 
-        const cmds = [
-            `sudo ${name} tppos 300000 1000 300000 world_the_end`,
-            `deop ${name}`,
-            `gamemode spectator ${name}`,
-            `kill ${name}`
-        ];
-        const runOnce = () => {
-            if (bot.core && typeof bot.core.run === 'function') {
-                for (const cmd of cmds) bot.core.run(cmd);
-                // Spam elder guardian jumpscare without delay.
-                // for (let i = 0; i < 25; i++) bot.core.run(`jumpscare ${name}`);
-            }
-        };
-        runOnce();
+        const punishKey = player.uuid || cleanName(name);
+        if (punishTimers.has(punishKey)) return true;
 
-        const timerKey = player.uuid || cleanName(name);
-        if (!punishTimers.has(timerKey)) {
-            const timer = setInterval(() => {
-                const current = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
-                if (!current || current.online === false || !shouldFilter(current)) {
-                    clearInterval(timer);
-                    punishTimers.delete(timerKey);
-                    return;
-                }
-                // If uuid becomes available later, keep timer keyed by name (stable enough).
-                runOnce();
-            }, 0);
-            punishTimers.set(timerKey, timer);
-        }
+        let stopped = false;
+        const stop = () => {
+            if (stopped) return;
+            stopped = true;
+            const t = punishTimers.get(punishKey);
+            if (t && t.timer) clearTimeout(t.timer);
+            punishTimers.delete(punishKey);
+        };
+
+        const cycle = () => {
+            if (stopped) return;
+            const current = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
+            if (!current || current.online === false || !shouldFilter(current)) {
+                stop();
+                return;
+            }
+            const exec = (cmd) => {
+                if (bot.core && typeof bot.core.run === 'function') bot.core.run(cmd);
+            };
+            // tppos, 300ms delay, then deop/etc, then op, then repeat
+            exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
+            const step2 = setTimeout(() => {
+                if (stopped) return;
+                const cur = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
+                if (!cur || cur.online === false || !shouldFilter(cur)) { stop(); return; }
+                exec(`deop ${name}`);
+                exec(`gamemode spectator ${name}`);
+                exec(`kill ${name}`);
+                // Spam elder guardian jumpscare without delay.
+                // for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
+                exec(`op ${name}`);
+                const next = setTimeout(cycle, 0);
+                const entry = punishTimers.get(punishKey);
+                if (entry) entry.timer = next;
+            }, 300);
+            const entry = punishTimers.get(punishKey);
+            if (entry) entry.timer = step2;
+        };
+
+        punishTimers.set(punishKey, { timer: null, stop });
+        cycle();
         return true;
     }
 
@@ -203,11 +218,11 @@ module.exports = function whitelistPlugin(bot) {
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
     bot.on('bot:disconnect', () => {
-        for (const timer of punishTimers.values()) clearInterval(timer);
+        for (const v of punishTimers.values()) { try { if (v && v.timer) clearTimeout(v.timer); else clearInterval(v); } catch(e){} }
         punishTimers.clear();
     });
     bot.on('bot:destroy', () => {
-        for (const timer of punishTimers.values()) clearInterval(timer);
+        for (const v of punishTimers.values()) { try { if (v && v.timer) clearTimeout(v.timer); else clearInterval(v); } catch(e){} }
         punishTimers.clear();
         clearInterval(scanTimer);
     });
