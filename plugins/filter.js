@@ -39,18 +39,19 @@ module.exports = function filterPlugin(bot) {
     function getServerData() {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null };
+            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null, mutes: [] };
             saveData(all);
         }
         if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = true;
         if (!Array.isArray(all[bot.id].ips)) all[bot.id].ips = [];
+        if (!Array.isArray(all[bot.id].mutes)) all[bot.id].mutes = [];
         return all[bot.id];
     }
 
     function updateServerData(updateFn) {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null };
+            all[bot.id] = { enabled: true, players: [], uuids: [], ips: [], regex: null, mutes: [] };
         }
         if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = true;
         updateFn(all[bot.id]);
@@ -80,10 +81,19 @@ module.exports = function filterPlugin(bot) {
         const matchUuid = data.uuids.some(id => String(id) === String(uuid));
         if (matchUuid) return true;
 
-        const playerIp = (player && (player.ip || player.IP)) || (bot.playersDatabase && typeof bot.playersDatabase.getPlayerIP === 'function' ? bot.playersDatabase.getPlayerIP(name) : null);
-        if (playerIp) {
-            const cleanIp = String(playerIp).trim();
-            if (data.ips.some(ip => String(ip).trim() === cleanIp)) return true;
+        const ipSet = new Set();
+        const directIp = (player && (player.ip || player.IP)) || (bot.playersDatabase && typeof bot.playersDatabase.getPlayerIP === 'function' ? bot.playersDatabase.getPlayerIP(name) : null);
+        if (directIp) ipSet.add(String(directIp).trim());
+        if (bot.playersDatabase && typeof bot.playersDatabase.getPlayerIPs === 'function') {
+            try {
+                const all = bot.playersDatabase.getPlayerIPs(name, false) || [];
+                for (const e of all) if (e && e.ip) ipSet.add(String(e.ip).trim());
+            } catch (e) {}
+        }
+        if (ipSet.size) {
+            for (const ip of data.ips) {
+                if (ipSet.has(String(ip).trim())) return true;
+            }
         }
 
         if (data.regex) {
@@ -146,6 +156,7 @@ module.exports = function filterPlugin(bot) {
     bot.on('player_added', p => {
         if (!bot.ready || !p.online || !p.uuid) return;
         if (shouldFilter(p)) doFilter(p);
+        runMuteForPlayer(p, 'join');
     });
 
     bot.on('player_updated', p => {
@@ -154,8 +165,8 @@ module.exports = function filterPlugin(bot) {
     });
 
     bot.on('bot:login', () => {
-        setTimeout(sweep, 500);
-        setTimeout(sweep, 1500);
+        sweep();
+        runMutes('start');
     });
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
@@ -169,6 +180,67 @@ module.exports = function filterPlugin(bot) {
         clearInterval(scanTimer);
     });
 
+
+    function cleanTarget(name) {
+        return String(name || '').replace(/§[0-9a-fk-or]/g, '').trim();
+    }
+
+    function getMuteTargets() {
+        const data = getServerData();
+        return Array.isArray(data.mutes) ? data.mutes.map(cleanTarget).filter(Boolean) : [];
+    }
+
+    function runMuteCommand(target) {
+        if (!target) return false;
+        const t = cleanTarget(target);
+        if (!t) return false;
+        if (bot.core && typeof bot.core.run === 'function') {
+            bot.core.run(`mute ${t}`);
+            return true;
+        }
+        return false;
+    }
+
+    function isMutedTarget(name) {
+        const n = cleanName(name);
+        if (!n) return false;
+        return getMuteTargets().some(t => cleanName(t) === n);
+    }
+
+    function runMuteForPlayer(player, reason) {
+        if (!player) return;
+        const name = cleanTarget(player.username || player.name);
+        if (!name) return;
+        if (isMutedTarget(name)) runMuteCommand(name);
+    }
+
+    function runMutes(reason) {
+        if (!bot.ready) return;
+        const targets = getMuteTargets();
+        if (!targets.length) return;
+        for (const t of targets) runMuteCommand(t);
+    }
+
+    // Best-effort: re-mute on self-unmute messages.
+    bot.on('chat_plain', msg => {
+        if (typeof msg !== 'string') return;
+        const lower = msg.toLowerCase();
+        const unmuteHints = ['unmuted', 'can now talk', 'no longer muted', 'you may now speak'];
+        if (!unmuteHints.some(h => lower.includes(h))) return;
+        // Try to extract a player name from common formats: "Player has been unmuted" / "Player can now talk"
+        const m = msg.match(/([A-Za-z0-9_]{2,16})\s+(?:has been unmuted|is no longer muted|can now talk)/i);
+        if (m && m[1] && isMutedTarget(m[1])) {
+            runMuteCommand(m[1]);
+            return;
+        }
+        // Fallback: re-apply to any muted target currently online.
+        if (bot.playersAPI && typeof bot.playersAPI.getAll === 'function') {
+            for (const p of bot.playersAPI.getAll() || []) {
+                if (p && p.online && isMutedTarget(p.username || p.name)) runMuteCommand(p.username || p.name);
+            }
+        }
+    });
+
     bot.filter = {
         isEnabled() { return getServerData().enabled !== false; },
         on() { updateServerData(d => { d.enabled = true; }); sweep(); return true; },
@@ -176,7 +248,47 @@ module.exports = function filterPlugin(bot) {
 
         get() {
             const data = getServerData();
-            return { players: [...data.players], uuids: [...data.uuids], regex: data.regex };
+            return { players: [...data.players], uuids: [...data.uuids], ips: [...(data.ips||[])], regex: data.regex, mutes: [...(data.mutes||[])] };
+        },
+
+
+        addMute(target) {
+            const t = cleanTarget(target);
+            if (!t) return false;
+            let ok = false;
+            updateServerData(data => {
+                if (!Array.isArray(data.mutes)) data.mutes = [];
+                const n = cleanName(t);
+                if (!data.mutes.some(x => cleanName(x) === n)) {
+                    data.mutes.push(t);
+                    ok = true;
+                }
+            });
+            if (ok) runMuteCommand(t);
+            return ok;
+        },
+
+        removeMute(target) {
+            const n = cleanName(target);
+            let ok = false;
+            updateServerData(data => {
+                if (!Array.isArray(data.mutes)) data.mutes = [];
+                const idx = data.mutes.findIndex(x => cleanName(x) === n);
+                if (idx !== -1) {
+                    data.mutes.splice(idx, 1);
+                    ok = true;
+                }
+            });
+            return ok;
+        },
+
+        listMutes() {
+            return getMuteTargets();
+        },
+
+        clearMutes() {
+            updateServerData(data => { data.mutes = []; });
+            return true;
         },
 
         addPlayer(name) {

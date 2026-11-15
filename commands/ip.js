@@ -1,7 +1,7 @@
 const gradient = require('../utils/gradient');
 
 const LIMIT = 200;
-const ALL_SERVER_FLAGS = ['-allserver', '-allservers'];
+const ALL_SERVER_FLAGS = ['-allserver', '-allservers', '--all', '--allservers'];
 
 const COLORS = {
     primary: '#55aaff',
@@ -174,7 +174,7 @@ module.exports = {
     description: 'List all IPs a player has joined with (click an IP to search its alts)',
     aliases: ['ips', 'playerips'],
     level: 0,
-    usage: 'ip [-allservers] <player>',
+    usage: 'ip [-allservers|--all] <player> [page]',
 
     async execute(ctx) {
         const bot = ctx.bot;
@@ -198,7 +198,7 @@ module.exports = {
         const player = playerArgs.join(' ').trim();
 
         if (!player) {
-            return ctx.tellrawCommand('Usage: ip [-allservers] <player> [page]');
+            return ctx.tellrawCommand('Usage: ip [-allservers|--all] <player> [page]');
         }
 
         const prefix = ctx.prefix || 'ba:';

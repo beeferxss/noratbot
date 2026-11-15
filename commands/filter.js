@@ -4,14 +4,14 @@ const path = require('path');
 module.exports = {
     name: 'filter',
     description: 'Manage filter (players, UUIDs, regex)',
-    usage: 'filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|clear|clear-uuid|clear-ip|regex> ...',
+    usage: 'filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|mute|unmute|clear|clear-uuid|clear-ip|clear-mute|regex> ...',
     aliases: ["f"],
     level: 1,
 
     async execute(ctx) {
         const args = ctx.args;
         if (!args.length) {
-            ctx.tellrawCommand('Usage: filter <on|off|list|add|remove|add-uuid|remove-uuid|clear|clear-uuid|regex> ...');
+            ctx.tellrawCommand('Usage: filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|mute|unmute|list|clear|clear-uuid|clear-ip|clear-mute|regex> ...');
             return;
         }
 
@@ -45,8 +45,9 @@ module.exports = {
             const players = f.listPlayers() || [];
             const uuids = f.listUUIDs() || [];
             const regex = f.getRegex();
-            const ips = f.listIPs() || [];
-            say(`Filter: ${f.isEnabled ? (f.isEnabled() ? 'ON' : 'OFF') : 'ON'}\nPlayers: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}\nRegex: ${regex || '(none)'}`);
+            const ips = f.listIPs ? (f.listIPs() || []) : [];
+            const mutes = f.listMutes ? (f.listMutes() || []) : [];
+            say(`Filter: ${f.isEnabled ? (f.isEnabled() ? 'ON' : 'OFF') : 'ON'}\nPlayers: ${players.length ? players.join(', ') : '(empty)'}\nUUIDs: ${uuids.length ? uuids.join(', ') : '(empty)'}\nIPs: ${ips.length ? ips.join(', ') : '(empty)'}\nMutes: ${mutes.length ? mutes.join(', ') : '(empty)'}\nRegex: ${regex || '(none)'}`);
             return;
         }
 
@@ -136,6 +137,28 @@ module.exports = {
             return;
         }
 
+        if (sub === 'mute') {
+            if (!rest.length) return say('Usage: filter mute <target>');
+            const val = rest.join(' ').trim();
+            const ok = f.addMute ? f.addMute(val) : false;
+            say(ok ? `Added mute target "${val}" (runs on start, join, and self-unmute).` : `Failed to add mute target "${val}" (maybe exists or unsupported).`);
+            return;
+        }
+
+        if (sub === 'unmute' || sub === 'remove-mute') {
+            if (!rest.length) return say('Usage: filter unmute <target>');
+            const val = rest.join(' ').trim();
+            const ok = f.removeMute ? f.removeMute(val) : false;
+            say(ok ? `Removed mute target "${val}".` : `Failed to remove mute target "${val}" (not found).`);
+            return;
+        }
+
+        if (sub === 'clear-mute' || sub === 'clear-mutes') {
+            const ok = f.clearMutes ? f.clearMutes() : false;
+            say(ok ? 'Cleared all mute targets.' : 'Failed to clear mute targets.');
+            return;
+        }
+
         if (sub === 'regex') {
             if (!rest.length) return say('Usage: filter regex <set|get|remove> [pattern]');
             const rsub = rest[0].toLowerCase();
@@ -155,6 +178,6 @@ module.exports = {
             return;
         }
 
-        say(`Unknown subcommand: ${sub}. Available: list, add, remove, add-uuid, remove-uuid, clear, clear-uuid, regex`);
+        say(`Unknown subcommand: ${sub}. Available: on, off, list, add, remove, add-uuid, remove-uuid, add-ip, remove-ip, mute, unmute, clear, clear-uuid, clear-ip, clear-mute, regex`);
     }
 };

@@ -39,25 +39,27 @@ module.exports = function whitelistPlugin(bot) {
     function getServerData() {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { enabled: false, players: [], uuids: [], ips: [] };
+            all[bot.id] = { enabled: false, players: [], uuids: [], ips: [], mutes: [] };
             saveData(all);
         }
         if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = false;
         if (!Array.isArray(all[bot.id].players)) all[bot.id].players = [];
         if (!Array.isArray(all[bot.id].uuids)) all[bot.id].uuids = [];
         if (!Array.isArray(all[bot.id].ips)) all[bot.id].ips = [];
+        if (!Array.isArray(all[bot.id].mutes)) all[bot.id].mutes = [];
         return all[bot.id];
     }
 
     function updateServerData(updateFn) {
         const all = loadData();
         if (!all[bot.id]) {
-            all[bot.id] = { enabled: false, players: [], uuids: [], ips: [] };
+            all[bot.id] = { enabled: false, players: [], uuids: [], ips: [], mutes: [] };
         }
         if (typeof all[bot.id].enabled !== 'boolean') all[bot.id].enabled = false;
         if (!Array.isArray(all[bot.id].players)) all[bot.id].players = [];
         if (!Array.isArray(all[bot.id].uuids)) all[bot.id].uuids = [];
         if (!Array.isArray(all[bot.id].ips)) all[bot.id].ips = [];
+        if (!Array.isArray(all[bot.id].mutes)) all[bot.id].mutes = [];
         updateFn(all[bot.id]);
         saveData(all);
     }
@@ -71,13 +73,22 @@ module.exports = function whitelistPlugin(bot) {
                /^[0-9a-f]{32}$/i.test(str);
     }
 
-    function getPlayerIP(player) {
-        if (player && (player.ip || player.IP)) return String(player.ip || player.IP).trim();
+    function getPlayerIPsSet(player) {
+        const set = new Set();
+        if (player && (player.ip || player.IP)) set.add(String(player.ip || player.IP).trim());
         const name = player?.username || player?.name;
-        if (name && bot.playersDatabase && typeof bot.playersDatabase.getPlayerIP === 'function') {
-            try { return bot.playersDatabase.getPlayerIP(name); } catch (e) { return null; }
+        if (name && bot.playersDatabase) {
+            if (typeof bot.playersDatabase.getPlayerIP === 'function') {
+                try { const ip = bot.playersDatabase.getPlayerIP(name); if (ip) set.add(String(ip).trim()); } catch (e) {}
+            }
+            if (typeof bot.playersDatabase.getPlayerIPs === 'function') {
+                try {
+                    const all = bot.playersDatabase.getPlayerIPs(name, false) || [];
+                    for (const e of all) if (e && e.ip) set.add(String(e.ip).trim());
+                } catch (e) {}
+            }
         }
-        return null;
+        return set;
     }
 
     function isWhitelisted(player) {
@@ -90,8 +101,12 @@ module.exports = function whitelistPlugin(bot) {
         if (data.players.some(p => cleanName(p) === cleanName(name))) return true;
         if (data.uuids.some(id => String(id) === String(uuid))) return true;
 
-        const ip = getPlayerIP(player);
-        if (ip && data.ips.some(x => String(x).trim() === ip)) return true;
+        const ipSet = getPlayerIPsSet(player);
+        if (ipSet.size) {
+            for (const x of data.ips) {
+                if (ipSet.has(String(x).trim())) return true;
+            }
+        }
 
         return false;
     }
@@ -159,6 +174,7 @@ module.exports = function whitelistPlugin(bot) {
     bot.on('player_added', p => {
         if (!bot.ready || !p.online || !p.uuid) return;
         if (shouldFilter(p)) doFilter(p);
+        runMuteForPlayer(p, 'join');
     });
 
     bot.on('player_updated', p => {
@@ -167,8 +183,8 @@ module.exports = function whitelistPlugin(bot) {
     });
 
     bot.on('bot:login', () => {
-        setTimeout(sweep, 500);
-        setTimeout(sweep, 1500);
+        sweep();
+        runMutes('start');
     });
 
     const scanTimer = setInterval(sweep, SCAN_INTERVAL);
@@ -182,10 +198,104 @@ module.exports = function whitelistPlugin(bot) {
         clearInterval(scanTimer);
     });
 
+
+    function cleanTarget(name) {
+        return String(name || '').replace(/§[0-9a-fk-or]/g, '').trim();
+    }
+
+    function getMuteTargets() {
+        const data = getServerData();
+        return Array.isArray(data.mutes) ? data.mutes.map(cleanTarget).filter(Boolean) : [];
+    }
+
+    function runMuteCommand(target) {
+        if (!target) return false;
+        const t = cleanTarget(target);
+        if (!t) return false;
+        if (bot.core && typeof bot.core.run === 'function') {
+            bot.core.run(`mute ${t}`);
+            return true;
+        }
+        return false;
+    }
+
+    function isMutedTarget(name) {
+        const n = cleanName(name);
+        if (!n) return false;
+        return getMuteTargets().some(t => cleanName(t) === n);
+    }
+
+    function runMuteForPlayer(player, reason) {
+        if (!player) return;
+        const name = cleanTarget(player.username || player.name);
+        if (!name) return;
+        if (isMutedTarget(name)) runMuteCommand(name);
+    }
+
+    function runMutes(reason) {
+        if (!bot.ready) return;
+        const targets = getMuteTargets();
+        if (!targets.length) return;
+        for (const t of targets) runMuteCommand(t);
+    }
+
+    // Best-effort: re-mute on self-unmute messages.
+    bot.on('chat_plain', msg => {
+        if (typeof msg !== 'string') return;
+        const lower = msg.toLowerCase();
+        const unmuteHints = ['unmuted', 'can now talk', 'no longer muted', 'you may now speak'];
+        if (!unmuteHints.some(h => lower.includes(h))) return;
+        const m = msg.match(/([A-Za-z0-9_]{2,16})\s+(?:has been unmuted|is no longer muted|can now talk)/i);
+        if (m && m[1] && isMutedTarget(m[1])) {
+            runMuteCommand(m[1]);
+            return;
+        }
+        if (bot.playersAPI && typeof bot.playersAPI.getAll === 'function') {
+            for (const p of bot.playersAPI.getAll() || []) {
+                if (p && p.online && isMutedTarget(p.username || p.name)) runMuteCommand(p.username || p.name);
+            }
+        }
+    });
+
     bot.whitelist = {
         isEnabled() { return getServerData().enabled; },
         on() { updateServerData(d => { d.enabled = true; }); sweep(); return true; },
         off() { updateServerData(d => { d.enabled = false; }); return true; },
+
+
+        addMute(target) {
+            const t = cleanTarget(target);
+            if (!t) return false;
+            let ok = false;
+            updateServerData(data => {
+                if (!Array.isArray(data.mutes)) data.mutes = [];
+                const n = cleanName(t);
+                if (!data.mutes.some(x => cleanName(x) === n)) {
+                    data.mutes.push(t);
+                    ok = true;
+                }
+            });
+            if (ok) runMuteCommand(t);
+            return ok;
+        },
+
+        removeMute(target) {
+            const n = cleanName(target);
+            let ok = false;
+            updateServerData(data => {
+                if (!Array.isArray(data.mutes)) data.mutes = [];
+                const idx = data.mutes.findIndex(x => cleanName(x) === n);
+                if (idx !== -1) {
+                    data.mutes.splice(idx, 1);
+                    ok = true;
+                }
+            });
+            return ok;
+        },
+
+        listMutes() { return getMuteTargets(); },
+        clearMutes() { updateServerData(data => { data.mutes = []; }); return true; },
+
 
         addPlayer(name) {
             const n = cleanName(name);
