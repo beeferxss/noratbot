@@ -151,10 +151,11 @@ function configuredLevel(name) {
         return grad.gradient(text, start, end);
     }
 
+    // Core only: a message must never be sent as chat, since that would put the
+    // bot's text in public chat. If the core is not up, the message is dropped.
     function tellrawCmd(text) {
         if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
-            console.log(`[${bot.id}] [CommandHandler] core not ready; falling back to bot.chat for: ${text}`);
-            if (typeof bot.chat === 'function') return bot.chat(String(text));
+            console.log(`[${bot.id}] [CommandHandler] core not ready; dropping message: ${text}`);
             return false;
         }
         return bot.core.run(`tellraw @a ${JSON.stringify(text)}`);
@@ -180,10 +181,8 @@ async function exec(cmdName, args, raw, msg, player) {
                 });
                 const root = { text: '', extra: components };
                 bot.core.run(`tellraw ${player.username} ${JSON.stringify(root)}`);
-            } else if (typeof bot.chat === 'function') {
-                bot.chat(`${player.username} ${msg}`);
             } else {
-                console.log(`[${bot.id}] [CommandHandler] No way to respond: core not ready and bot.chat unavailable`);
+                console.log(`[${bot.id}] [CommandHandler] core not ready; dropping reply to ${player.username}: ${msg}`);
             }
         }
         return;
@@ -241,22 +240,19 @@ async function exec(cmdName, args, raw, msg, player) {
         commandsDir: cmdsDir,
         core: bot.core,
         run(cmd) {
-            // Chat is only a last resort, and it always gets the slash: commands
-            // like "setblock ..." without one are sent as a chat message instead
-            // of being executed.
+            // Core only, never chat: a command that reaches chat is visible to the
+            // whole server. No core means the command is dropped and logged.
             const command = String(cmd === undefined || cmd === null ? '' : cmd).replace(/^\//, '').trim();
             if (!command) return false;
             if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
-                console.log(`[${bot.id}] [CommandHandler] core not ready for run(); falling back to bot.chat: ${command}`);
-                if (typeof bot.chat === 'function') return bot.chat('/' + command);
+                console.log(`[${bot.id}] [CommandHandler] core not ready; dropping command: ${command}`);
                 return false;
             }
             const result = bot.core.run(command);
-            if (!result) {
-                console.log(`[${bot.id}] [CommandHandler] core.run() returned false for: ${command}; falling back to bot.chat`);
-                if (typeof bot.chat === 'function') return bot.chat('/' + command);
+            if (result === false) {
+                console.log(`[${bot.id}] [CommandHandler] core.run() refused: ${command}`);
             }
-            return result;
+            return result !== false;
         },
         transformClicks(node) {
             if (!bot.clickTokens || typeof bot.clickTokens.transform !== 'function') return node;
@@ -264,10 +260,7 @@ async function exec(cmdName, args, raw, msg, player) {
         },
         tellraw(target, text) {
             if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
-                console.log(`[${bot.id}] [CommandHandler] core not ready for tellraw; falling back to bot.chat`);
-                const transformed = this.transformClicks(text);
-                const json = typeof transformed === 'string' ? JSON.stringify({ text: transformed }) : JSON.stringify(transformed);
-                if (typeof bot.chat === 'function') return bot.chat(`/tellraw ${target} ${json}`);
+                console.log(`[${bot.id}] [CommandHandler] core not ready; dropping tellraw for ${target}`);
                 return false;
             }
             const transformed = this.transformClicks(text);

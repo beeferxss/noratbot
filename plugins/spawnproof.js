@@ -28,22 +28,15 @@ module.exports = function spawnproofPlugin(bot) {
         return x >= ox && x <= bounds.x && y >= oy && y <= bounds.y && z >= oz && z <= bounds.z;
     }
 
-    // Prefer the core, which writes the command into a command block without a
-    // chat line; fall back to chat only with the leading slash attached.
+    // Core only: the clone is written into a command block, never sent to chat.
     function runCommand(cmd) {
         const command = String(cmd === undefined || cmd === null ? '' : cmd).replace(/^\//, '').trim();
         if (!command) return false;
-        if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
-            const result = bot.core.run(command);
-            if (result !== false) return true;
-        }
-        if (typeof bot.chat !== 'function') return false;
-        try {
-            bot.chat('/' + command);
-            return true;
-        } catch (e) {
+        if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
+            console.log(`[${bot.id}] [Spawnproof] core not ready; dropping command: ${command}`);
             return false;
         }
+        return bot.core.run(command) !== false;
     }
 
     function scheduleRestore() {
