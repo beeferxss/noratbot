@@ -18,7 +18,7 @@ module.exports = function commandHandler(bot) {
         if (Array.isArray(cfg.prefixes)) return cfg.prefixes.filter(p => typeof p === 'string' && p.length > 0);
         if (Array.isArray(cfg.prefix)) return cfg.prefix.filter(p => typeof p === 'string' && p.length > 0);
         if (typeof cfg.prefix === 'string' && cfg.prefix.length > 0) return [cfg.prefix];
-        return ['ba:'];
+        return ['ba:', '}'];
     })();
 
     const logSettings = bot.globalConfig?.logging || {};
