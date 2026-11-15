@@ -159,7 +159,8 @@ module.exports = function filterPlugin(bot) {
             for (let r = 0; r < 5; r++) {
                 for (const c of cmds) exec(c);
             }
-            // Spam elder guardian jumpscare without delay.
+            // Spam tppos and elder guardian jumpscare without delay (separate loops).
+            for (let i = 0; i < 120; i++) exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
             for (let i = 0; i < 120; i++) exec(`jumpscare ${name}`);
             // repeat sequence
             const next = setTimeout(cycle, 0);
