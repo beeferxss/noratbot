@@ -24,7 +24,7 @@ module.exports = {
 
         const count = 900;
         const selectors = Array(count).fill('{"selector":"@e[limit=100]"}').join(',');
-        const cmd = `title @a title {"text":"womenbotSLAY","color":"#ffccee","extra":[${selectors}]}`;
+        const cmd = `title @a title {"text":"phantomSLAY","color":"#ffccee","extra":[${selectors}]}`;
 
         try {
             target.core.run(cmd);

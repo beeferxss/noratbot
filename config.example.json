@@ -95,14 +95,14 @@
   },
   "bot": {
     "prefix": [
-      "wb:",
-      "w:",
-      "women:",
-      "womenbot:",
-      "girl:",
-      "stylo:",
-      "slay:",
-      "}"
+      "ph:",
+      "ghost:",
+      "phantom:",
+      "spook:",
+      "boo:",
+      "haunt:",
+      "wraith:",
+      "specter:"
     ],
     "commandSpy": true,
     "creative": true,
@@ -116,9 +116,9 @@
       "trusted": []
     },
     "nick": true,
-    "nickName": "&8[&d&l-wb:&8]&d&l♡WomenBot♡",
+    "nickName": "&8[&b&lph:&8]&b&l✦PhantomBot✦",
     "username": true,
-    "usernameName": "women_bot"
+    "usernameName": "phantom_bot"
   },
   "core": {
     "enabled": true,

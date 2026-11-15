@@ -1,7 +1,7 @@
 const LEVELS = {
-    0: { name: 'girlies', color: '#ff77cc' },
-    1: { name: 'besties', color: '#ffaa00' },
-    2: { name: 'queen', color: '#ff4fa3' }
+    0: { name: 'spirits', color: '#00ccff' },
+    1: { name: 'wraiths', color: '#00ff88' },
+    2: { name: 'phantom', color: '#8844ff' }
 };
 
 const CATEGORIES = {
@@ -13,7 +13,7 @@ const CATEGORIES = {
     Other: []
 };
 
-const PREFIX = 'wb:';
+const PREFIX = 'ph:';
 
 function categoryOf(cmd) {
     const name = String(cmd.name).toLowerCase();
@@ -31,7 +31,7 @@ function sendMenu(ctx) {
     const userLevel = Number(ctx.level ?? 0);
     const out = [];
 
-    out.push({ text: 'wOmEn bOt ☆ dYnaMiC hElP ☆ (stylo chaos)', color: '#ff77cc', bold: true });
+    out.push({ text: 'PhantomBot ✦ dYnaMiC hElP ✦ (the void remembers)', color: '#00ccff', bold: true });
     out.push({ text: '\n\nby vibes/rank??\n', color: 'light_purple' });
 
     for (const lvl of Object.keys(LEVELS).map(Number)) {
@@ -41,7 +41,7 @@ function sendMenu(ctx) {
             color: accessible ? LEVELS[lvl].color : 'dark_gray',
             bold: true,
             click_event: accessible ? { action: 'suggest_command', command: `${PREFIX}dhelp rank ${LEVELS[lvl].name.toLowerCase()}` } : undefined,
-            hover_event: { action: 'show_text', value: { text: accessible ? `peek ${LEVELS[lvl].name} stuff` : 'no access babe', color: accessible ? 'light_purple' : 'red' } }
+            hover_event: { action: 'show_text', value: { text: accessible ? `peek ${LEVELS[lvl].name} realm` : 'no access spirit', color: accessible ? 'light_purple' : 'red' } }
         });
         out.push({ text: '  ✿  ', color: 'gray' });
     }
@@ -53,7 +53,7 @@ function sendMenu(ctx) {
             color: '#ff99dd',
             bold: true,
             click_event: { action: 'suggest_command', command: `${PREFIX}dhelp cat ${cat.toLowerCase()}` },
-            hover_event: { action: 'show_text', value: { text: `open ${cat} idk`, color: 'light_purple' } }
+            hover_event: { action: 'show_text', value: { text: `open ${cat} realm`, color: 'light_purple' } }
         });
         out.push({ text: '  ~  ', color: 'gray' });
     }
@@ -128,7 +128,7 @@ function sendCategory(ctx, catName) {
 
 module.exports = {
     name: 'dhelp',
-    description: 'Dynamic help (women bot chaotic stylo edition)',
+    description: 'Dynamic help (PhantomBot ghost edition)',
     usage: 'dhelp [rank girlies|besties|queen | cat <name> | command]',
     level: 0,
     aliases: ['dh'],

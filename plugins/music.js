@@ -615,7 +615,7 @@ module.exports = function musicPlugin(bot) {
     let volume = 1.0;
     let pitch = 0;
     let displayMode = 'actionbar';
-    let bossbarId = 'womenbot_music';
+    let bossbarId = 'phantombot_music';
     let bossbarActive = false;
     let displayInterval = null;
     let ticksUntilPausedActionbar = 20;
@@ -669,7 +669,7 @@ module.exports = function musicPlugin(bot) {
     }
 
     function generateActionbar() {
-        if (!currentSong) return '♫ wOmEn bOt muziq ✨';
+        if (!currentSong) return '♫ PhantomBot muziq ✦';
 
         const name = currentSong.name || 'Unknown';
         const current = currentSong.time;

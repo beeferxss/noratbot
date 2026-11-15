@@ -81,7 +81,7 @@ module.exports = {
 
         const srv = target.id || 'current';
         const components = [];
-        const header = grad(`wOmEn bOt ~♡~ Online players on ${srv} (page ${page}/${totalPages})`, '#f4fcff', '#238bff');
+        const header = grad(`PhantomBot ✦ Online spirits on ${srv} (page ${page}/${totalPages})`, '#00ccff', '#8844ff');
         components.push(...header);
         components.push({ text: "\n", color: "#aaaaaa" });
         for (const p of pagePlayers) {
@@ -92,7 +92,7 @@ module.exports = {
                         for (const letterComponent of nameGrad) {
                 letterComponent.click_event = {
                     action: 'suggest_command',
-                    command: `wb:alts ${name}`
+                    command: `ph:alts ${name}`
                 };
                 letterComponent.hover_event = {
                     action: 'show_text',

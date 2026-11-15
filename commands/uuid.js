@@ -48,8 +48,8 @@ module.exports = {
         }
 
         let fullMessage = isSelf 
-            ? `wOmEn bOt ~♡~ Your UUID: ${uuid}` 
-            : `wOmEn bOt ~♡~ UUID of ${targetName}: ${uuid}`;
+            ? `PhantomBot ✦ Your UUID: ${uuid}` 
+            : `PhantomBot ✦ UUID of ${targetName}: ${uuid}`;
 
 
         const comps = gradient.gradient(fullMessage, '#f4fcff', '#238bff');

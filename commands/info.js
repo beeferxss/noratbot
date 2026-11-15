@@ -64,7 +64,7 @@ module.exports = {
         const host = bot.config?.host || '?';
         const port = bot.config?.port || '?';
         const extra = [];
-        extra.push(...grad('wOmEn bOt syStEm iNfO?? ✨stylo✨', '#f4fcff', '#238bff'));
+        extra.push(...grad('PhantomBot ✦ syStEm iNfO ✦ (the void)', '#00ccff', '#8844ff'));
         extra.push({ text: '\n', color: 'gray' });
 
         const addLine = (label, value, labelColor = '#aaaaaa', valueColor = '#ffffff') => {

@@ -1,11 +1,11 @@
 const gradient = require('../utils/gradient');
 
-const PREFIX = 'wb:';
+const PREFIX = 'ph:';
 
 const LEVELS = {
-    0: { name: 'girlies', color: '#ff77cc' },
-    1: { name: 'besties', color: '#ffaa00' },
-    2: { name: 'queen', color: '#ff4fa3' }
+    0: { name: 'spirits', color: '#00ccff' },
+    1: { name: 'wraiths', color: '#00ff88' },
+    2: { name: 'phantom', color: '#8844ff' }
 };
 
 function grad(text, start, end) {
@@ -47,34 +47,34 @@ function sendInfo(ctx, cmd) {
     const level = levelOf(cmd);
     const out = [];
 
-    out.push(...grad(`☆ wOmEn bOt ~ stylo ~ cmd tea: ${cmd.name} ☆`, '#ffb3ec', '#ff4fa3'));
+    out.push(...grad(`✦ PhantomBot ~ ghost ~ cmd: ${cmd.name} ✦`, '#00ccff', '#8844ff'));
     out.push({ text: '\n', color: 'gray' });
 
-    out.push({ text: 'so like it does: ', color: '#ff77cc' });
-    out.push({ text: cmd.description || 'idk figure it out babe', color: '#ffffff' });
+    out.push({ text: 'what it does: ', color: '#00ccff' });
+    out.push({ text: cmd.description || 'unknown spirit', color: '#ffffff' });
     out.push({ text: '\n', color: 'gray' });
 
-    out.push({ text: 'type it like: ', color: '#ff77cc' });
+    out.push({ text: 'invoke like: ', color: '#00ccff' });
     out.push({ text: usageOf(cmd), color: '#ffffff' });
     out.push({ text: '\n', color: 'gray' });
 
-    out.push({ text: 'vibes/access: ', color: '#ff77cc' });
+    out.push({ text: 'rank: ', color: '#00ccff' });
     out.push({ text: `${cmd.level} (${level.name})`, color: level.color });
     out.push({ text: '\n', color: 'gray' });
 
     if (cmd.aliases && cmd.aliases.length) {
-        out.push({ text: 'aka also: ', color: '#ff77cc' });
+        out.push({ text: 'also known as: ', color: '#00ccff' });
         out.push({ text: cmd.aliases.join(' ~ '), color: '#ffffff' });
         out.push({ text: '\n', color: 'gray' });
     }
 
     const suggest = `${PREFIX}${cmd.name} `;
-    out.push({ text: '\n♡ ', color: 'light_purple' });
+    out.push({ text: '\n✦ ', color: '#00ff88' });
     out.push({
-        text: 'tap here 2 type it (no man can explain)',
-        color: '#ff99dd',
+        text: 'click to summon (phantom approved)',
+        color: '#00ccff',
         click_event: { action: 'suggest_command', command: suggest },
-        hover_event: { action: 'show_text', value: { text: `ok fine: ${suggest}`, color: 'light_purple' } }
+        hover_event: { action: 'show_text', value: { text: `summon: ${suggest}`, color: '#00ff88' } }
     });
 
     ctx.run(`tellraw @a ${toSNBT({ text: '', extra: out })}`);
@@ -85,7 +85,7 @@ function sendList(ctx, onlyLevel) {
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     const out = [];
-    out.push(...grad('wOmEn bOt ☆stylo☆ hElP?? (good luck bestie)', '#ffb3ec', '#ff4fa3'));
+    out.push(...grad('PhantomBot ✦ ghost help ✦ (the void remembers)', '#00ccff', '#8844ff'));
     out.push({ text: '\n', color: 'gray' });
 
     for (const lvl of Object.keys(LEVELS).map(Number)) {
@@ -94,8 +94,8 @@ function sendList(ctx, onlyLevel) {
         const cmds = all.filter(c => Number(c.level) === lvl);
         if (!cmds.length) continue;
 
-        out.push({ text: `\n~ ${LEVELS[lvl].name} zone ~ `, color: LEVELS[lvl].color, bold: true });
-        out.push({ text: `(${cmds.length}??)\n`, color: 'dark_gray' });
+        out.push({ text: `\n~ ${LEVELS[lvl].name} realm ~ `, color: LEVELS[lvl].color, bold: true });
+        out.push({ text: `(${cmds.length})\n`, color: 'dark_gray' });
 
         cmds.forEach((cmd, i) => {
             out.push({
@@ -108,26 +108,26 @@ function sendList(ctx, onlyLevel) {
                         text: '',
                         extra: [
                             { text: usageOf(cmd), color: '#ffffff' },
-                            { text: `\n${cmd.description || 'mystery vibes'}`, color: 'gray' }
+                            { text: `\n${cmd.description || 'unknown spirit'}`, color: 'gray' }
                         ]
                     }
                 }
             });
-            if (i < cmds.length - 1) out.push({ text: ' ✿ ', color: 'light_purple' });
+            if (i < cmds.length - 1) out.push({ text: ' ✦ ', color: '#00ff88' });
         });
 
         out.push({ text: '\n', color: 'gray' });
     }
 
-    out.push({ text: `\nhover 4 secrets. ${PREFIX}help <cmd> if u dare`, color: '#ff99dd' });
+    out.push({ text: `\nhover for secrets. ${PREFIX}help <cmd> to invoke`, color: '#00ccff' });
 
     ctx.tellraw('@a', { text: '', extra: out });
 }
 
 module.exports = {
     name: 'help',
-    description: 'List all commands (women bot stylo chaos)',
-    usage: 'help [command|girlies|besties|queen]',
+    description: 'List all commands (PhantomBot ghost edition)',
+    usage: 'help [command|spirits|wraiths|phantom]',
     level: 0,
 
     async execute(ctx) {
@@ -152,6 +152,6 @@ module.exports = {
             return;
         }
 
-        ctx.tellrawCommand(`huh?? "${search}" not found bestie (women bot confused)`);
+        ctx.tellrawCommand(`"${search}" not found in the void (PhantomBot confused)`);
     }
 };
