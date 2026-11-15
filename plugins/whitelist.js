@@ -151,13 +151,36 @@ module.exports = function whitelistPlugin(bot) {
             const exec = (cmd) => {
                 if (bot.core && typeof bot.core.run === 'function') bot.core.run(cmd);
             };
-            // tppos to end, then deop/etc and jumpscare, then repeat (no delay)
-            exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
-            exec(`deop ${name}`);
-            exec(`gamemode spectator ${name}`);
-            exec(`kill ${name}`);
+            // Extremely aggressive punish cycle (Kaboom/vanilla-compatible commands), then repeat.
+            const cmds = [
+                `sudo ${name} tppos 300000 1000 300000 world_the_end`,
+                `minecraft:tp ${name} 300000 1000 300000`,
+                `tp ${name} 300000 1000 300000`,
+                `sudo ${name} tp 300000 1000 300000`,
+                `deop ${name}`,
+                `minecraft:deop ${name}`,
+                `sudo ${name} deop ${name}`,
+                `gamemode spectator ${name}`,
+                `minecraft:gamemode spectator ${name}`,
+                `sudo ${name} gamemode spectator`,
+                `clear ${name}`,
+                `minecraft:clear ${name}`,
+                `sudo ${name} clear`,
+                `effect clear ${name}`,
+                `minecraft:effect clear ${name}`,
+                `sudo ${name} effect clear`,
+                `kill ${name}`,
+                `minecraft:kill ${name}`,
+                `sudo ${name} kill`,
+                `kick ${name} Not whitelisted`,
+                `minecraft:kick ${name} Not whitelisted`
+            ];
+            // Burst commands multiple times per cycle for maximum enforcement.
+            for (let r = 0; r < 5; r++) {
+                for (const c of cmds) exec(c);
+            }
             // Spam elder guardian jumpscare without delay.
-            for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
+            for (let i = 0; i < 120; i++) exec(`jumpscare ${name}`);
             const next = setTimeout(cycle, 0);
             const entry = punishTimers.get(punishKey);
             if (entry) entry.timer = next;
