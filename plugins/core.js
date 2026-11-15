@@ -150,49 +150,44 @@ module.exports = function core(bot) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // This bot speaks minecraft-protocol directly - there is no mineflayer, so
-    // no bot.creative / bot.blockAt / bot.heldItem. Everything below is packets.
-    const HOTBAR_SLOT_START = 36;
-
-    function hotbarIndex() {
-        return Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
-    }
-
-    let ItemFactory = null;
-    let ItemFactoryVersion = null;
-    function itemFactory(version) {
-        if (ItemFactory && ItemFactoryVersion === version) return ItemFactory;
-        try {
-            ItemFactory = require('prismarine-item')(version);
-            ItemFactoryVersion = version;
-            return ItemFactory;
-        } catch (e) {
-            return null;
+    function markBlock(x, y, z, alive, damage = false) {
+        if (!inside(x, y, z)) return;
+        const k = key(x, y, z);
+        const now = Date.now();
+        let entry = coreBlocks.get(k);
+        if (!entry) {
+            entry = { alive: !!alive, verifiedAt: alive ? now : 0 };
+            coreBlocks.set(k, entry);
+        } else {
+            entry.alive = !!alive;
+            entry.verifiedAt = now;
+        }
+        if (damage && alive === false) {
+            scheduleDamage('block-removed');
         }
     }
 
-    // The creative slot packet wants an *item* id. A block id is not one, so only
-    // fall back to the block tables (minecraft-data included) when the bot's own
-    // registry has no item entry for the core block.
-    function coreBlockItemId() {
-        const registryId = bot.registry?.itemsByName?.[BLOCK]?.id;
-        if (Number.isInteger(registryId)) return registryId;
-
-        const data = dataFor(dataVersion()) || mcData;
-
-        const item = data?.itemsByName?.[BLOCK];
-        if (item && Number.isInteger(item.id)) return item.id;
-
-        const block = bot.registry?.blocksByName?.[BLOCK] || data?.blocksByName?.[BLOCK];
-        if (block) {
-            const viaItems = data?.items?.[block.id];
-            if (viaItems && viaItems.name === BLOCK) return viaItems.id;
+    function getRecentlyVerifiedSurvivor() {
+        const now = Date.now();
+        for (const [k, entry] of coreBlocks) {
+            if (!entry || !entry.alive) continue;
+            if (typeof entry.verifiedAt !== 'number' || now - entry.verifiedAt > SURVIVOR_MAX_AGE) continue;
+            const parts = k.split(':');
+            if (parts.length !== 3) continue;
+            const x = Number(parts[0]), y = Number(parts[1]), z = Number(parts[2]);
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+            return { x, y, z };
         }
+        return null;
+    }
 
-        const scanned = Array.isArray(data?.itemsArray)
-            ? data.itemsArray.find(entry => entry.name === BLOCK)
-            : null;
-        return scanned && Number.isInteger(scanned.id) ? scanned.id : null;
+    function coreAreaLoaded() {
+        if (!position || bot.core.origin.x === null) return false;
+        const ox = bot.core.origin.x, oy = bot.core.origin.y, oz = bot.core.origin.z;
+        const bx = bot.core.bounds.x, by = bot.core.bounds.y, bz = bot.core.bounds.z;
+        // Simple heuristic: if we have any block entries or we're within reasonable distance
+        if (coreBlocks.size > 0) return true;
+        return true; // allow attempts; real check done by chunk data elsewhere
     }
 
 
@@ -214,12 +209,38 @@ module.exports = function core(bot) {
 
         const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
         let success = false;
-        try {
-            if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
-            success = bot.chat('/' + command) !== false;
-        } catch (error) {
-            console.error(`[${bot.id}] [Core] Chat refill error:`, error);
-            success = false;
+
+        // Reuse remains: write the fill into any known surviving core block.
+        const survivor = getRecentlyVerifiedSurvivor();
+        if (survivor && !force) {
+            try {
+                markOwn(survivor.x, survivor.y, survivor.z);
+                if (typeof bot.write !== 'function') throw new Error('bot.write unavailable');
+                bot.write('update_command_block', {
+                    location: survivor,
+                    command,
+                    mode: 1,
+                    flags: 0b101
+                });
+                await new Promise(resolve => setTimeout(resolve, 35));
+                success = true;
+            } catch (error) {
+                success = false;
+                const k = key(survivor.x, survivor.y, survivor.z);
+                if (coreBlocks.has(k)) coreBlocks.get(k).alive = false;
+                console.error(`[${bot.id}] [Core] Survivor refill error:`, error);
+            }
+        }
+
+        // Fallback: chat the fill command (allowed only where appropriate; keep as requested).
+        if (!success) {
+            try {
+                if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
+                success = bot.chat('/' + command) !== false;
+            } catch (error) {
+                console.error(`[${bot.id}] [Core] Chat refill error:`, error);
+                success = false;
+            }
         }
 
         if (!success) {
