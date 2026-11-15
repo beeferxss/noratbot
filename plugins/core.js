@@ -431,15 +431,23 @@ module.exports = function core(bot) {
         const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
         let success = false;
 
-        // The core block is the refiller: it holds the fill command with auto-run.
-        // Repairing means destroying it and placing it again, not filling the area
-        // from chat.
-        try {
-            success = await placeCommandBlockAt(bot.core.origin.x, bot.core.origin.y, bot.core.origin.z, command);
-            if (success) log(`Core block placed at ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z}`);
-        } catch (error) {
-            success = false;
-            console.error(`[${bot.id}] [Core] Core block placement failed:`, error.message || error);
+        // The core block is the refiller: it holds the fill command (on the
+        // configured y level) with auto-run. Repairing means destroying that block
+        // and placing it again, not filling the area from chat.
+        const seed = bot.core.seed;
+        const seedReachable = !!seed && !!position &&
+            Math.abs(position.x - seed.x) <= 6 &&
+            Math.abs(position.y - seed.y) <= 6 &&
+            Math.abs(position.z - seed.z) <= 6;
+
+        if (seedReachable) {
+            try {
+                success = await placeCommandBlockAt(seed.x, seed.y, seed.z, command);
+                if (success) log(`Core block placed at ${seed.x} ${seed.y} ${seed.z}`);
+            } catch (error) {
+                success = false;
+                console.error(`[${bot.id}] [Core] Core block placement failed:`, error.message || error);
+            }
         }
 
         const survivor = success ? null : getRecentlyVerifiedSurvivor();
@@ -466,7 +474,9 @@ module.exports = function core(bot) {
             }
         }
 
-        if (!success) {
+        // Hide mode must not leak the core position, so it never falls back to a
+        // chat command; it retries the block method instead.
+        if (!success && !HIDE) {
             try {
                 if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
                 success = bot.chat('/' + command) !== false;
@@ -475,7 +485,7 @@ module.exports = function core(bot) {
             }
         }
 
-        if (!success && backupReady) {
+        if (!success && backupReady && !HIDE) {
             try {
                 const bx = bot.core.origin.x + 1000;
                 const by = bot.core.origin.y;
@@ -495,7 +505,7 @@ module.exports = function core(bot) {
         }
 
         // Create a backup copy for future clone restores.
-        if (!backupReady) {
+        if (!backupReady && !HIDE) {
             try {
                 const bx = bot.core.origin.x + 1000;
                 const by = bot.core.origin.y;
@@ -555,6 +565,13 @@ module.exports = function core(bot) {
             const x = packet.location.x;
             const y = packet.location.y;
             const z = packet.location.z;
+            // The core block sits outside the filled area, so it needs its own check.
+            const seed = bot.core.seed;
+            if (seed && x === seed.x && y === seed.y && z === seed.z) {
+                if (isOwn(x, y, z)) return;
+                scheduleDamage(`core block ${x} ${y} ${z}`);
+                return;
+            }
             if (!inside(x, y, z)) return;
             if (isOwn(x, y, z)) return;
             markBlock(x, y, z, false, true);
@@ -863,17 +880,21 @@ module.exports = function core(bot) {
         _cursor: { x: null, y: Y, z: null },
         pendingTeleport: null,
         awaitingSurface: false,
+        // Where the physical core block sits; the filled area is origin..bounds.
+        seed: null,
 
         // /top lands the bot on the surface, and the core block goes in the block
         // it stands on, so the core follows the bot instead of area.y.
         setOriginFromSurface(pos) {
             const x = Math.floor(pos.x);
             const z = Math.floor(pos.z);
-            const y = Math.floor(pos.y) - 1;
-            this.origin = { x, y, z };
-            this.bounds = { x: x + SIZE - 1, y: y + SIZE - 1, z: z + SIZE - 1 };
+            // The filled area stays on the configured y level; /top only decides
+            // where the bot - and the core block it places - is standing.
+            this.origin = { x, y: Y, z };
+            this.bounds = { x: x + SIZE - 1, y: Y + SIZE - 1, z: z + SIZE - 1 };
             this.cursor = { ...this.origin };
             this._cursor = { ...this.origin };
+            this.seed = { x, y: Math.floor(pos.y) - 1, z };
             chunkX = Math.floor(x / 16);
             chunkZ = Math.floor(z / 16);
             this.ready = false;
@@ -883,7 +904,7 @@ module.exports = function core(bot) {
             backupReady = false;
             graceUntil = 0;
             createCoreMap(false);
-            log(`Core anchored on the surface at ${x} ${y} ${z}`);
+            log(`Core area at ${x} ${Y} ${z}; core block goes at ${x} ${this.seed.y} ${z}`);
         },
 
         reset() {
@@ -905,6 +926,7 @@ module.exports = function core(bot) {
                 backupReady = false;
                 graceUntil = 0;
                 createCoreMap(false);
+                this.seed = { x: rx, y: Y, z: rz };
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
                 return true;
@@ -918,6 +940,7 @@ module.exports = function core(bot) {
             this.bounds = { x: x + SIZE - 1, y: Y + SIZE - 1, z: z + SIZE - 1 };
             this.cursor = { ...this.origin };
             this._cursor = { ...this.origin };
+            this.seed = { x, y: Y, z };
             chunkX = cx;
             chunkZ = cz;
             this.ready = false;
