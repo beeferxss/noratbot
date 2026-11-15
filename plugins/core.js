@@ -125,6 +125,139 @@ module.exports = function core(bot) {
         }
     }
 
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    let Vec3 = null;
+    try {
+        Vec3 = require('vec3').Vec3;
+    } catch (e) {
+        Vec3 = null;
+    }
+
+    function blockAt(x, y, z) {
+        if (!Vec3 || typeof bot.blockAt !== 'function') return null;
+        try {
+            return bot.blockAt(new Vec3(x, y, z));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isAir(block) {
+        return !block || block.name === 'air' || block.name === 'cave_air' || block.name === 'void_air';
+    }
+
+    // The bot hovers, otherwise digging the block under it drops it into the hole
+    // before the core block is placed.
+    async function ensureFlying() {
+        if (!bot.creative || typeof bot.creative.startFlying !== 'function') return false;
+        if (bot.creative.flying) return true;
+        try {
+            await bot.creative.startFlying();
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Creative slot packet instead of /give, so no item command with the core
+    // position ends up in the server log.
+    async function equipCoreBlock() {
+        // itemsByName: a block id is not an item id, and the slot packet wants the item.
+        const def = bot.registry?.itemsByName?.[BLOCK] || bot.registry?.blocksByName?.[BLOCK];
+        if (!def) return false;
+        if (!bot.creative || typeof bot.creative.setInventorySlot !== 'function') return false;
+        try {
+            const Item = require('prismarine-item')(bot.version);
+            const slot = 36 + Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
+            await bot.creative.setInventorySlot(slot, new Item(def.id, 1));
+            return true;
+        } catch (e) {
+            console.error(`[${bot.id}] [Core] Could not put ${BLOCK} in hand:`, e.message || e);
+            return false;
+        }
+    }
+
+    function writeCoreCommand(x, y, z, command) {
+        try {
+            return bot.write('update_command_block', {
+                location: { x, y, z },
+                command: String(command).replace(/^\//, ''),
+                mode: 1,
+                flags: 0b101
+            }) !== false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Placement packet fallback, for when there is nothing to place against or
+    // the server refuses the normal placement.
+    function placeViaPacket(x, y, z) {
+        const payload = {
+            hand: 0,
+            location: { x, y, z },
+            direction: 1,
+            cursorX: 0.5,
+            cursorY: 1,
+            cursorZ: 0.5,
+            insideBlock: false,
+            sequence: 0
+        };
+        for (const name of ['use_item_on', 'block_place']) {
+            try {
+                if (bot.write(name, payload) !== false) return true;
+            } catch (e) {
+                // wrong packet name for this version, try the next one
+            }
+        }
+        return false;
+    }
+
+    // Destroys whatever sits at (x,y,z) and puts a command block holding `command`
+    // back in its place. Returns true once the command was written into it.
+    async function placeCommandBlockAt(x, y, z, command) {
+        markOwn(x, y, z);
+        await ensureFlying();
+
+        const existing = blockAt(x, y, z);
+        if (!isAir(existing)) {
+            if (typeof bot.dig !== 'function') return false;
+            try {
+                await bot.dig(existing);
+            } catch (e) {
+                log(`Could not break ${existing.name} at ${x} ${y} ${z}: ${e.message || e}`);
+                return false;
+            }
+            await sleep(60);
+        }
+
+        if (!(await equipCoreBlock())) return false;
+        await sleep(60);
+
+        let placed = false;
+        const below = blockAt(x, y - 1, z);
+        if (!isAir(below) && typeof bot.placeBlock === 'function') {
+            try {
+                await bot.placeBlock(below, new Vec3(0, 1, 0));
+                placed = true;
+            } catch (e) {
+                placed = false;
+            }
+        }
+        if (!placed) placed = placeViaPacket(x, y, z);
+        if (!placed) {
+            log(`Could not place the core block at ${x} ${y} ${z}`);
+            return false;
+        }
+
+        await sleep(60);
+        markOwn(x, y, z);
+        return writeCoreCommand(x, y, z, command);
+    }
+
     // A failed refill used to retry exactly once and then give up forever, which
     // left core.ready false and made every command disappear without any message.
     function scheduleRefillRetry() {
@@ -233,7 +366,18 @@ module.exports = function core(bot) {
         const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
         let success = false;
 
-        const survivor = getRecentlyVerifiedSurvivor();
+        // The core block is the refiller: it holds the fill command with auto-run.
+        // Repairing means destroying it and placing it again, not filling the area
+        // from chat.
+        try {
+            success = await placeCommandBlockAt(bot.core.origin.x, bot.core.origin.y, bot.core.origin.z, command);
+            if (success) log(`Core block placed at ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z}`);
+        } catch (error) {
+            success = false;
+            console.error(`[${bot.id}] [Core] Core block placement failed:`, error.message || error);
+        }
+
+        const survivor = success ? null : getRecentlyVerifiedSurvivor();
         if (survivor && !force) {
             try {
                 markOwn(survivor.x, survivor.y, survivor.z);
@@ -453,6 +597,22 @@ module.exports = function core(bot) {
                     setTimeout(() => {
                         if (bot && typeof bot.chat === 'function') {
                             try { bot.chat(`/tp @s ${tp.x} ${tp.y} ${tp.z}`); } catch (e) {}
+                            // The hide spot is inside the ground; /top puts the bot on the
+                            // surface so it can fly and place the core block instead of
+                            // suffocating (and falling) where the tp dropped it.
+                            setTimeout(() => {
+                                bot.core.awaitingSurface = true;
+                                try { bot.chat('/top'); } catch (e) { bot.core.awaitingSurface = false; }
+                                // If /top is missing or refused, fall back to the configured
+                                // height instead of waiting for a surface position forever.
+                                setTimeout(() => {
+                                    if (bot.core.awaitingSurface) {
+                                        bot.core.awaitingSurface = false;
+                                        log('/top did not report a position; using the configured height');
+                                        if (position) bot.core.refill('top-timeout');
+                                    }
+                                }, 5000);
+                            }, 750);
                         }
                     }, 3000);
                 }
@@ -462,7 +622,18 @@ module.exports = function core(bot) {
                 }, HIDE ? Math.max(INITIAL_DELAY, 8000) : INITIAL_DELAY);
                 return;
             }
-            if (HIDE) return;
+            if (HIDE) {
+                if (bot.core.awaitingSurface) {
+                    bot.core.awaitingSurface = false;
+                    bot.core.setOriginFromSurface(position);
+                    if (chunkTimer) clearTimeout(chunkTimer);
+                    chunkTimer = setTimeout(() => {
+                        chunkTimer = null;
+                        if (position) bot.core.refill('surface');
+                    }, CHUNK_DELAY);
+                }
+                return;
+            }
             const cx = Math.floor(position.x / SIZE);
             const cz = Math.floor(position.z / SIZE);
             if (cx === chunkX && cz === chunkZ) return;
@@ -626,6 +797,29 @@ module.exports = function core(bot) {
         cursor: { x: null, y: Y, z: null },
         _cursor: { x: null, y: Y, z: null },
         pendingTeleport: null,
+        awaitingSurface: false,
+
+        // /top lands the bot on the surface, and the core block goes in the block
+        // it stands on, so the core follows the bot instead of area.y.
+        setOriginFromSurface(pos) {
+            const x = Math.floor(pos.x);
+            const z = Math.floor(pos.z);
+            const y = Math.floor(pos.y) - 1;
+            this.origin = { x, y, z };
+            this.bounds = { x: x + SIZE - 1, y: y + SIZE - 1, z: z + SIZE - 1 };
+            this.cursor = { ...this.origin };
+            this._cursor = { ...this.origin };
+            chunkX = Math.floor(x / 16);
+            chunkZ = Math.floor(z / 16);
+            this.ready = false;
+            ownChanges.clear();
+            damagePending = false;
+            damageDuringRefill = false;
+            backupReady = false;
+            graceUntil = 0;
+            createCoreMap(false);
+            log(`Core anchored on the surface at ${x} ${y} ${z}`);
+        },
 
         reset() {
             if (HIDE) {
@@ -825,6 +1019,7 @@ module.exports = function core(bot) {
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
+            this.awaitingSurface = false;
             this.origin = { x: null, y: Y, z: null };
             this.bounds = { x: null, y: Y + SIZE - 1, z: null };
             this.cursor = { x: null, y: Y, z: null };
