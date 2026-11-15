@@ -150,77 +150,12 @@ module.exports = function core(bot) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    let Vec3 = null;
-    try {
-        Vec3 = require('vec3').Vec3;
-    } catch (e) {
-        Vec3 = null;
-    }
+    // This bot speaks minecraft-protocol directly - there is no mineflayer, so
+    // no bot.creative / bot.blockAt / bot.heldItem. Everything below is packets.
+    const HOTBAR_SLOT_START = 36;
 
-    function blockAt(x, y, z) {
-        if (!Vec3 || typeof bot.blockAt !== 'function') return null;
-        try {
-            return bot.blockAt(new Vec3(x, y, z));
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function isAir(block) {
-        return !block || block.name === 'air' || block.name === 'cave_air' || block.name === 'void_air';
-    }
-
-    // The bot hovers, otherwise digging the block under it drops it into the hole
-    // before the core block is placed.
-    async function ensureFlying() {
-        if (!bot.creative || typeof bot.creative.startFlying !== 'function') return false;
-        if (bot.creative.flying) return true;
-        try {
-            await bot.creative.startFlying();
-            return true;
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function isCreative() {
-        if (bot.game?.gameMode === 'creative') return true;
-        if (bot.selfcare?.isCreative) {
-            try {
-                if (bot.selfcare.isCreative()) return true;
-            } catch (e) {
-                // ignore
-            }
-        }
-        return false;
-    }
-
-    // Creative slot packets are ignored in survival, which is the first reason
-    // the bot ends up empty handed. selfcare owns the pre-core chat path, so ask
-    // it for creative mode and wait for the gamemode packet.
-    async function ensureCreativeMode() {
-        if (isCreative()) return true;
-
-        try {
-            if (bot.selfcare?.checkCreative) bot.selfcare.checkCreative();
-            else if (bot.selfcare?.execute) bot.selfcare.execute('/gamemode creative');
-        } catch (e) {
-            // ignore
-        }
-
-        for (let i = 0; i < 15; i++) {
-            if (isCreative()) return true;
-            await sleep(100);
-        }
-        return isCreative();
-    }
-
-    function isLiquid(block) {
-        return !!block && /water|lava|bubble|kelp|seagrass/i.test(String(block.name || ''));
-    }
-
-    function heldCoreBlock() {
-        return !!(bot.heldItem && bot.heldItem.name === BLOCK);
+    function hotbarIndex() {
+        return Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
     }
 
     let ItemFactory = null;
@@ -260,57 +195,94 @@ module.exports = function core(bot) {
         return scanned && Number.isInteger(scanned.id) ? scanned.id : null;
     }
 
-    // Creative slot packet instead of /give, so no item command with the core
-    // position ends up in the server log.
-    async function equipCoreBlock() {
-        if (!bot.creative || typeof bot.creative.setInventorySlot !== 'function') return false;
+    // Flying keeps the bot from dropping when the block under it is broken.
+    function sendAbilities() {
+        try {
+            return bot.write('abilities', { flags: 0x02 }) !== false; // 0x02 = flying
+        } catch (e) {
+            return false;
+        }
+    }
 
+    // Puts the core block into the selected hotbar slot with the creative slot
+    // packet, so no /give with coordinates appears in the server log.
+    function holdCoreBlock() {
         const id = coreBlockItemId();
         if (!Number.isInteger(id)) {
             log(`No item id for ${BLOCK} in this version's data`);
             return false;
         }
 
+        const version = dataVersion();
+        const Factory = itemFactory(version);
+        let item;
         try {
-            const slot = 36 + Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
-            const Factory = itemFactory(dataVersion());
-            const item = Factory
-                ? new Factory(id, 1)
-                : { type: id, count: 1, nbt: null, name: BLOCK };
-            await bot.creative.setInventorySlot(slot, item);
+            item = Factory ? Factory.toNotch(new Factory(id, 1)) : { present: true, itemId: id, itemCount: 1 };
+        } catch (e) {
+            item = { present: true, itemId: id, itemCount: 1 };
+        }
+
+        try {
+            const hotbar = hotbarIndex();
+            bot.write('set_creative_slot', { slot: HOTBAR_SLOT_START + hotbar, item });
+            bot.write('held_item_slot', { slotId: hotbar });
             return true;
         } catch (e) {
-            console.error(`[${bot.id}] [Core] Could not put ${BLOCK} in hand:`, e.message || e);
+            console.error(`[${bot.id}] [Core] Could not hold ${BLOCK}:`, e.message || e);
             return false;
         }
     }
 
-    // What matters is the held item, not that a packet was sent: wait for the
-    // server to confirm the slot and only then ask for the item if it is missing.
-    async function obtainCoreBlock() {
-        if (heldCoreBlock()) return true;
-
-        await equipCoreBlock();
-        for (let i = 0; i < 5; i++) {
-            if (heldCoreBlock()) return true;
-            await sleep(60);
-        }
-
-        log(`${BLOCK} did not appear in the hand; asking for it`);
-        const command = `give @s ${BLOCK} 1`;
+    // Breaks the block at (x,y,z) with the dig packets; harmless on water.
+    async function digAt(x, y, z) {
         try {
-            if (bot.core?.ready && typeof bot.core.run === 'function') bot.core.run(command);
-            else if (bot.selfcare?.execute) bot.selfcare.execute('/' + command);
-            else if (typeof bot.chat === 'function') bot.chat('/' + command);
+            bot.write('block_dig', { status: 0, location: { x, y, z }, face: 1, sequence: 0 });
+            await sleep(50);
+            bot.write('block_dig', { status: 2, location: { x, y, z }, face: 1, sequence: 0 });
+            return true;
         } catch (e) {
-            // ignore, the wait below decides
+            return false;
         }
+    }
 
-        for (let i = 0; i < 10; i++) {
-            if (heldCoreBlock()) return true;
-            await sleep(100);
+    // The server answers a placement with a block update, which is the only
+    // confirmation available without a world model.
+    const blockChanges = new Map();
+    function noteBlockChange(x, y, z) {
+        blockChanges.set(key(x, y, z), Date.now());
+        if (blockChanges.size > 4096) {
+            const cutoff = Date.now() - 60000;
+            for (const [id, ts] of blockChanges) {
+                if (ts < cutoff) blockChanges.delete(id);
+            }
         }
-        return heldCoreBlock();
+    }
+
+    function trackBlockChange(packet) {
+        const location = packet?.location;
+        if (location) noteBlockChange(location.x, location.y, location.z);
+    }
+
+    function sendBlockPlace(location, direction) {
+        const payload = {
+            hand: 0,
+            location,
+            direction,
+            cursorX: 0.5,
+            cursorY: 1,
+            cursorZ: 0.5,
+            insideBlock: false,
+            worldBorderHit: false,
+            sequence: 0
+        };
+        for (const name of ['block_place', 'use_item_on']) {
+            try {
+                if (bot.write(name, payload) !== false) return true;
+            } catch (e) {
+                // packet name not in this version, try the next one
+            }
+        }
+        return false;
     }
 
     function writeCoreCommand(x, y, z, command) {
@@ -326,90 +298,43 @@ module.exports = function core(bot) {
         }
     }
 
-    // Placement packet. The server places at (location + face), and clicking a
-    // replaceable block fills that block itself - which is why water works: the
-    // packet targets the water cell and the water is replaced.
-    function placeViaPacket(x, y, z) {
-        const target = blockAt(x, y, z);
-        const below = blockAt(x, y - 1, z);
-
-        let location;
-        if (isLiquid(target)) {
-            location = { x, y, z };
-        } else if (!isAir(below) && !isLiquid(below)) {
-            location = { x, y: y - 1, z };
-        } else {
-            location = { x, y, z };
-        }
-
-        const payload = {
-            hand: 0,
-            location,
-            direction: 1,
-            cursorX: 0.5,
-            cursorY: 1,
-            cursorZ: 0.5,
-            insideBlock: false,
-            sequence: 0,
-            worldBorderHit: false
-        };
-        for (const name of ['use_item_on', 'block_place']) {
-            try {
-                if (bot.write(name, payload) !== false) return true;
-            } catch (e) {
-                // wrong packet name for this version, try the next one
-            }
-        }
-        return false;
-    }
-
     // Destroys whatever sits at (x,y,z) and puts a command block holding `command`
     // back in its place. Returns true once the command was written into it.
     async function placeCommandBlockAt(x, y, z, command) {
         markOwn(x, y, z);
-        await ensureCreativeMode();
-        await ensureFlying();
+        sendAbilities();
 
-        // Water and other liquids are not diggable and are replaced by the
-        // placement itself, which is what makes this work on water.
-        const existing = blockAt(x, y, z);
-        if (!isAir(existing) && !isLiquid(existing) && typeof bot.dig === 'function') {
-            try {
-                await bot.dig(existing);
-            } catch (e) {
-                log(`Could not break ${existing.name} at ${x} ${y} ${z}: ${e.message || e}`);
+        await digAt(x, y, z);
+        if (!holdCoreBlock()) return false;
+        await sleep(120); // let the server apply the creative slot
+
+        const id = key(x, y, z);
+        const mark = blockChanges.get(id) || 0;
+        const confirm = async timeout => {
+            const started = Date.now();
+            while (Date.now() - started < timeout) {
+                if ((blockChanges.get(id) || 0) > mark) return true;
+                await sleep(40);
             }
-            await sleep(60);
-        }
+            return false;
+        };
 
-        if (!(await obtainCoreBlock())) return false;
-        await sleep(60);
-
-        // Packet placement first: it needs nothing to click against, so it works
-        // in air, in water and above holes.
-        let placed = placeViaPacket(x, y, z);
+        // 1) on the top face of the block below: air, or the hole just dug
+        sendBlockPlace({ x, y: y - 1, z }, 1);
+        let placed = await confirm(400);
+        // 2) into the cell itself: this is what replaces water/lava
         if (!placed) {
-            const below = blockAt(x, y - 1, z);
-            if (!isAir(below) && !isLiquid(below) && typeof bot.placeBlock === 'function') {
-                try {
-                    await bot.placeBlock(below, new Vec3(0, 1, 0));
-                    placed = true;
-                } catch (e) {
-                    placed = false;
-                }
-            }
+            sendBlockPlace({ x, y, z }, 1);
+            placed = await confirm(400);
         }
+        // 3) from the block above, looking down
+        if (!placed) {
+            sendBlockPlace({ x, y: y + 1, z }, 0);
+            placed = await confirm(400);
+        }
+
         if (!placed) {
             log(`Could not place the core block at ${x} ${y} ${z}`);
-            return false;
-        }
-
-        // The packet is fire-and-forget, so confirm the block actually appeared
-        // before writing a command into a cell that may still be empty.
-        await sleep(150);
-        const placedBlock = blockAt(x, y, z);
-        if (placedBlock && !/command_block/.test(String(placedBlock.name))) {
-            log(`Placement at ${x} ${y} ${z} did not take (still ${placedBlock.name})`);
             return false;
         }
 
@@ -826,6 +751,7 @@ module.exports = function core(bot) {
         }
     };
 
+    bot.on('block_change', trackBlockChange);
     bot.on('block_change', handlers.onBlockChange);
     bot.on('map_chunk', handlers.onMapChunk);
     bot.on('multi_block_change', handlers.onMultiBlockChange);
@@ -1178,6 +1104,7 @@ module.exports = function core(bot) {
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
             if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
+            bot.removeListener('block_change', trackBlockChange);
             bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
             bot.removeListener('multi_block_change', handlers.onMultiBlockChange);
