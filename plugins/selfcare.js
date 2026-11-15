@@ -205,9 +205,16 @@ module.exports = function selfcare(bot) {
         const name = (cfg.nickName || '').trim();
         if (!name) return;
         if (nickReq) return;
+        if (typeof bot.chat !== 'function') return;
 
         nickReq = true;
-        run(`nick ${name}`);
+        try {
+            // Run in chat and pull first as requested.
+            bot.chat('/pull');
+            setTimeout(() => {
+                try { bot.chat(`/nick ${name}`); } catch (e) {}
+            }, 300);
+        } catch (e) {}
         setTimeout(() => {
             nickReq = false;
         }, RETRY_DELAY);
