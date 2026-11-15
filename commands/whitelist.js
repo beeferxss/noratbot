@@ -1,7 +1,7 @@
 module.exports = {
     name: 'whitelist',
     description: 'Manage whitelist (on/off, add/remove players)',
-    usage: 'whitelist <on|off|add|remove|add-ip|remove-ip|list|clear>',
+    usage: 'whitelist <on|off|add|remove|list|clear> (add supports --all for all known IPs)',
     aliases: ['wl'],
     level: 1,
 
@@ -56,8 +56,25 @@ module.exports = {
         }
 
         if (sub === 'add') {
-            if (!rest.length) return say('Usage: whitelist add <player>');
-            const val = rest.join(' ');
+            if (!rest.length) return say('Usage: whitelist add <player|uuid|ip> [--all]');
+            const args2 = [...rest];
+            const allFlags = ['--all', '--allservers', '-allservers', '-allserver'];
+            const useAll = args2.length && allFlags.includes(String(args2[args2.length - 1]).toLowerCase());
+            if (useAll) args2.pop();
+            const val = args2.join(' ').trim();
+            if (!val) return say('Usage: whitelist add <player|uuid|ip> [--all]');
+            if (useAll) {
+                if (!ctx.bot.playersDatabase || typeof ctx.bot.playersDatabase.getPlayerIPs !== 'function') {
+                    return say('Players database not available.');
+                }
+                const entries = ctx.bot.playersDatabase.getPlayerIPs(val, false) || [];
+                const ips = [...new Set(entries.map(e => e && e.ip ? String(e.ip).trim() : '').filter(Boolean))];
+                if (!ips.length) return say(`No known IPs found for "${val}".`);
+                let added = 0;
+                for (const ip of ips) if (w.addIP(ip)) added++;
+                say(added ? `Added ${added} IP(s) for "${val}" to whitelist.` : `No new IPs added for "${val}" (maybe already in list).`);
+                return;
+            }
             let ok;
             if (isUuid(val)) ok = w.addUUID(val);
             else if (isIp(val)) ok = w.addIP(val);

@@ -4,14 +4,14 @@ const path = require('path');
 module.exports = {
     name: 'filter',
     description: 'Manage filter (players, UUIDs, regex)',
-    usage: 'filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|mute|unmute|clear|clear-uuid|clear-ip|clear-mute|regex> ...',
+    usage: 'filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip [--all]|remove-ip|mute|unmute|clear|clear-uuid|clear-ip|clear-mute|regex> ...',
     aliases: ["f"],
     level: 1,
 
     async execute(ctx) {
         const args = ctx.args;
         if (!args.length) {
-            ctx.tellrawCommand('Usage: filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip|remove-ip|mute|unmute|list|clear|clear-uuid|clear-ip|clear-mute|regex> ...');
+            ctx.tellrawCommand('Usage: filter <on|off|list|add|remove|add-uuid|remove-uuid|add-ip [--all]|remove-ip|mute|unmute|list|clear|clear-uuid|clear-ip|clear-mute|regex> ...');
             return;
         }
 
@@ -116,8 +116,25 @@ module.exports = {
         }
 
         if (sub === 'add-ip') {
-            if (!rest.length) return say('Usage: filter add-ip <ip>');
-            const val = rest.join(' ').trim();
+            if (!rest.length) return say('Usage: filter add-ip <ip|player --all>');
+            const args2 = [...rest];
+            const allFlags = ['--all', '--allservers', '-allservers', '-allserver'];
+            const useAll = args2.length && allFlags.includes(String(args2[args2.length - 1]).toLowerCase());
+            if (useAll) args2.pop();
+            const val = args2.join(' ').trim();
+            if (!val) return say('Usage: filter add-ip <ip|player --all>');
+            if (useAll) {
+                if (!ctx.bot.playersDatabase || typeof ctx.bot.playersDatabase.getPlayerIPs !== 'function') {
+                    return say('Players database not available.');
+                }
+                const entries = ctx.bot.playersDatabase.getPlayerIPs(val, false) || [];
+                const ips = [...new Set(entries.map(e => e && e.ip ? String(e.ip).trim() : '').filter(Boolean))];
+                if (!ips.length) return say(`No known IPs found for "${val}".`);
+                let added = 0;
+                for (const ip of ips) if (f.addIP(ip)) added++;
+                say(added ? `Added ${added} IP(s) for "${val}" to filter list.` : `No new IPs added for "${val}" (maybe already in list).`);
+                return;
+            }
             const ok = f.addIP(val);
             say(ok ? `Added IP "${val}" to filter list` : `Failed to add IP to filter list (maybe exists)`);
             return;
