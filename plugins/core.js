@@ -181,6 +181,31 @@ module.exports = function core(bot) {
         return null;
     }
 
+    function scheduleDamage(reason = 'damage') {
+        if (Date.now() < graceUntil) return;
+        if (refilling) { damageDuringRefill = true; return; }
+        if (cooldown) { damagePending = true; return; }
+        if (damageTimer) clearTimeout(damageTimer);
+        damageTimer = setTimeout(() => {
+            damageTimer = null;
+            if (!position || !REFILL_ENABLED) return;
+            if (refilling) return;
+            if (cooldown) { damagePending = true; return; }
+            bot.core.refill(reason);
+        }, DAMAGE_DELAY);
+    }
+
+    function scheduleRefillRetry() {
+        if (refillRetryTimer) clearTimeout(refillRetryTimer);
+        refillRetryTimer = setTimeout(() => {
+            refillRetryTimer = null;
+            if (!position || !REFILL_ENABLED) return;
+            if (refilling || cooldown) return;
+            refillRetryDelay = Math.min(refillRetryDelay * 2, 30000);
+            bot.core.refill('retry', true);
+        }, refillRetryDelay);
+    }
+
     function createCoreMap(alive = false) {
         coreBlocks.clear();
         if (bot.core.origin.x === null) return;
