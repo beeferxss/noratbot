@@ -174,7 +174,7 @@ module.exports = function filterPlugin(bot) {
                         rz = Math.floor(bot.entity.position.z);
                     }
                     // Teleport to end, set warp, then return to core. No core placement in the end.
-                    chat('tppos 100 64 100 world_the_end');
+                    chat('tppos 30000 1000 30000 5000 2000 world_the_end');
                     await sleep(1500);
                     chat('setwarp end_jail_trap');
                     await sleep(800);
