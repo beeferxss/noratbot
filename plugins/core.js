@@ -179,6 +179,13 @@ module.exports = function core(bot) {
         }
     }
 
+    function markBlock(x, y, z, alive, verified = true) {
+        const entry = coreBlocks.get(key(x, y, z));
+        if (!entry) return;
+        entry.alive = Boolean(alive);
+        if (verified) entry.verifiedAt = Date.now();
+    }
+
     function getRecentlyVerifiedSurvivor() {
         const now = Date.now();
         for (const [id, entry] of coreBlocks) {
@@ -323,6 +330,23 @@ module.exports = function core(bot) {
     }
 
     const handlers = {
+        // The fill places repeating command blocks, so a block we wrote a command
+        // into is a command block until something changes it. Block state ids are
+        // deliberately not inspected: any change here that we did not make
+        // ourselves means that block is no longer ours.
+        onBlockChange(packet) {
+            if (refilling) { damageDuringRefill = true; return; }
+            if (Date.now() < graceUntil) return;
+            if (!packet?.location || !bot.core.ready) return;
+            const x = packet.location.x;
+            const y = packet.location.y;
+            const z = packet.location.z;
+            if (!inside(x, y, z)) return;
+            if (isOwn(x, y, z)) return;
+            markBlock(x, y, z, false, true);
+            scheduleDamage(`block-change ${x} ${y} ${z}`);
+        },
+
         onMapChunk(packet) {
             if (refilling) { damageDuringRefill = true; return; }
             if (Date.now() < graceUntil) return;
@@ -385,6 +409,33 @@ module.exports = function core(bot) {
             }
         },
 
+        onMultiBlockChange(packet) {
+            if (refilling) { damageDuringRefill = true; return; }
+            if (Date.now() < graceUntil) return;
+            if (!packet || !bot.core.ready) return;
+            if (!Array.isArray(packet.records)) return;
+            const coordinates = packet.chunkCoordinates;
+            if (!coordinates || typeof coordinates.x !== 'number' || typeof coordinates.y !== 'number' || typeof coordinates.z !== 'number') return;
+            if (coordinates.x !== chunkX || coordinates.z !== chunkZ) return;
+            let damaged = false;
+            for (const record of packet.records) {
+                if (typeof record !== 'number') continue;
+                const localX = (record >>> 8) & 0xF;
+                const localZ = (record >>> 4) & 0xF;
+                const localY = record & 0xF;
+                const x = coordinates.x * 16 + localX;
+                const y = coordinates.y * 16 + localY;
+                const z = coordinates.z * 16 + localZ;
+                if (!inside(x, y, z)) continue;
+                if (isOwn(x, y, z)) continue;
+                markBlock(x, y, z, false, true);
+                damaged = true;
+            }
+            if (damaged) {
+                scheduleDamage('multi-block-change');
+            }
+        },
+
         onPosition(packet) {
             if (typeof packet?.x !== 'number' || typeof packet?.y !== 'number' || typeof packet?.z !== 'number') return;
             position = { x: packet.x, y: packet.y, z: packet.z };
@@ -423,7 +474,9 @@ module.exports = function core(bot) {
         }
     };
 
+    bot.on('block_change', handlers.onBlockChange);
     bot.on('map_chunk', handlers.onMapChunk);
+    bot.on('multi_block_change', handlers.onMultiBlockChange);
     bot.on('position', handlers.onPosition);
     bot.on('end', handlers.onEnd);
 
@@ -739,7 +792,9 @@ module.exports = function core(bot) {
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
             if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
+            bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
+            bot.removeListener('multi_block_change', handlers.onMultiBlockChange);
             bot.removeListener('position', handlers.onPosition);
             bot.removeListener('end', handlers.onEnd);
             bot.removeListener(QUERY_C, onNbtQueryResponse);
