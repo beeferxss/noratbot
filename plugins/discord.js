@@ -240,20 +240,155 @@ function rankColor(rank) {
 }
 
 function commandLevel(cmd) {
-    return requiredLevel(cmd?.roleRequired);
+    // commands/ use `level`, the old discord commands used `roleRequired`.
+    return requiredLevel(cmd?.level ?? cmd?.roleRequired);
+}
+
+function botsMap() {
+    const manager = global.botManager;
+    if (manager?.bots instanceof Map) return manager.bots;
+
+    const map = new Map();
+    for (const [id, bot] of global.discordBots) map.set(id, bot);
+    return map;
+}
+
+function resolveBot(invocation) {
+    const channelId = String(invocation.channel?.id ?? invocation.channelId ?? '');
+
+    let bot = invocation.bot || null;
+    if (!bot && channelId) bot = linkedBot(channelId);
+    if (!bot && channelId) {
+        bot = bots().find(candidate => String(candidate.config?.channelId ?? '') === channelId) || null;
+    }
+    if (!bot) {
+        const list = bots();
+        if (list.length === 1) bot = list[0];
+    }
+    if (!bot) bot = bots()[0] || null;
+
+    return bot;
+}
+
+function botContext(bot) {
+    if (bot) return bot;
+
+    return {
+        id: 'discord',
+        config: {},
+        globalConfig: { discord: bridge.config },
+        commands: {
+            get: () => null,
+            has: () => false,
+            all: () => [],
+            getPlayerUUID: () => null,
+            getPlayerLevel: () => 0
+        },
+        playersAPI: null,
+        core: null,
+        client: null,
+        entity: null
+    };
+}
+
+function commandMapFor(bot) {
+    const map = new Map();
+
+    for (const entry of bot?.commands?.all?.() || []) {
+        if (!entry?.name) continue;
+        map.set(String(entry.name).toLowerCase(), entry);
+        for (const alias of entry.aliases || []) {
+            if (typeof alias === 'string') map.set(alias.toLowerCase(), entry);
+        }
+    }
+
+    if (map.size) return map;
+
+    for (const [name, cmd] of global.discordCommands) map.set(name, cmd);
+    return map;
+}
+
+// Discord users inherit the in-game rank of the player with a matching name.
+function playerLevelFor(bot, names) {
+    let level = LEVELS.PUBLIC;
+
+    const authList = bot?.globalConfig?.bot?.authList || {};
+    const admins = (Array.isArray(authList.admin) ? authList.admin : []).map(name => String(name).toLowerCase());
+    const trusted = (Array.isArray(authList.trusted) ? authList.trusted : []).map(name => String(name).toLowerCase());
+
+    for (const raw of names) {
+        const name = String(raw || '').toLowerCase().trim();
+        if (!name) continue;
+
+        if (admins.includes(name)) level = Math.max(level, LEVELS.ADMIN);
+        else if (trusted.includes(name)) level = Math.max(level, LEVELS.TRUSTED);
+
+        const uuid = bot?.commands?.getPlayerUUID?.(name);
+        if (uuid && typeof bot?.commands?.getPlayerLevel === 'function') {
+            level = Math.max(level, clampLevel(Number(bot.commands.getPlayerLevel(uuid)) || 0));
+        }
+    }
+
+    return level;
+}
+
+function applyRank(invocation) {
+    invocation.bot = resolveBot(invocation);
+
+    const discordLevel = levelOf(rankOf(invocation.member, bridge.config));
+    const names = [
+        invocation.user?.username,
+        invocation.user?.globalName,
+        invocation.member?.displayName,
+        invocation.member?.nickname
+    ];
+
+    const level = Math.max(discordLevel, playerLevelFor(invocation.bot, names));
+
+    invocation.level = level;
+    invocation.rank = rankName(level);
+
+    return invocation;
+}
+
+function runWithTellrawCapture(bot, send, command) {
+    const text = String(command ?? '');
+
+    const match = /^\/?tellraw\s+\S+\s+([\s\S]+)$/i.exec(text);
+
+    if (match) {
+        let component;
+
+        try {
+            component = JSON.parse(match[1]);
+        } catch {
+            try {
+                component = parseSNBT(match[1]);
+            } catch {
+                component = match[1];
+            }
+        }
+
+        send(toPlain(component));
+        return true;
+    }
+
+    return runCore(bot, text);
 }
 
 async function sendPermissionDenied(responder, rank, required, ephemeral = false) {
+    const target = responder instanceof Responder ? responder : new Responder(responder);
+
     const embed = createEmbed(
         `Your rank: **${rank}**\nRequired rank: **${rankName(required)}**`,
         { title: 'Permission denied', color: COLORS.error }
     );
 
-    if (ephemeral && responder?.isInteraction) {
-        return responder.target.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    if (ephemeral && target.isInteraction) {
+        return target.target.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
-    return responder.send({ embeds: [embed], allowedMentions: mentionSafe() });
+    return target.send({ embeds: [embed], allowedMentions: mentionSafe() });
 }
 
 function bots() {
@@ -560,6 +695,7 @@ function startCommandWatcher() {
 
             commandWatcher._timeout = setTimeout(() => {
                 loadCommands();
+                bridge.slashRegistered = false;
                 void registerSlashCommands();
                 commandWatcher._timeout = null;
             }, 500);
@@ -1177,41 +1313,96 @@ function registerBot(bot) {
 }
 
 function buildDiscordContext(cmd, invocation) {
-    const color = rankColor(invocation.rank);
+    const bot = botContext(invocation.bot || resolveBot(invocation));
+    const level = invocation.level ?? LEVELS.PUBLIC;
+    const rank = invocation.rank ?? rankName(level);
+    const color = rankColor(rank);
+    const playerName = displayName(invocation.member, invocation.user);
+
+    const send = (text, options = {}) => sendOutput(invocation.responder, String(text ?? ''), {
+        title: options.title ?? `${cmd.name} • ${bot.id}`,
+        color: options.color ?? color,
+        footer: options.footer ?? `${FOOTER} • ${rank}`
+    });
 
     const reply = (text, options = {}) => sendOutput(invocation.responder, text, {
         title: options.title ?? 'Command response',
         color: options.color ?? color,
-        footer: options.footer ?? `${FOOTER} • ${invocation.rank}`
+        footer: options.footer ?? `${FOOTER} • ${rank}`
     });
 
+    const player = {
+        name: playerName,
+        username: playerName,
+        uuid: invocation.user?.id || null,
+        level,
+        rank,
+        permissionLevel: level,
+        permission: String(rank).toLowerCase(),
+        discordId: invocation.user?.id,
+        discordTag: invocation.user?.tag,
+        discordUsername: invocation.user?.username,
+        discordDisplayName: playerName
+    };
+
     return {
-        source: invocation.source,
-        command: cmd,
-        commandName: cmd.name,
-        args: invocation.args,
-        raw: invocation.raw,
-        message: invocation.message,
-        interaction: invocation.interaction,
+        // Same surface the in-game command handler builds, so commands/ work
+        // unchanged here.
+        bot,
+        bots: botsMap(),
+        player,
+        user: player,
         member: invocation.member,
-        user: invocation.user,
         guild: invocation.guild,
         channel: invocation.channel,
-        client: bridge.client,
-        bot: invocation.bot,
-        bots: bots(),
-        level: invocation.level,
-        rank: invocation.rank,
+        command: cmd,
+        commandName: cmd.name,
+        args: invocation.args || [],
+        raw: invocation.raw || '',
+        message: invocation.message,
+        interaction: invocation.interaction,
+        source: invocation.source,
+        prefix: bridge.prefix,
+        level,
+        rank,
         levels: LEVELS,
+        commands: commandMapFor(bot),
+        commandsDir: CMD_DIR,
+        core: bot.core || null,
         config: bridge.config,
+        client: bridge.client,
         botById: getBot,
+
+        run: command => runWithTellrawCapture(bot, send, command),
+        tellraw: (target, value) => {
+            send(toPlain(value));
+            return true;
+        },
+        tellrawCommand: value => {
+            send(toPlain(value));
+            return true;
+        },
+        transformClicks: node => node,
+
+        // Discord extras
+        discord: {
+            id: invocation.user?.id,
+            tag: invocation.user?.tag,
+            username: invocation.user?.username,
+            displayName: playerName,
+            rank,
+            level,
+            permissionLevel: level,
+            member: invocation.member
+        },
         reply,
-        embed: (embed, options = {}) => sendOutput(invocation.responder, embed, options),
-        run: command => runCore(invocation.bot, command)
+        embed: (embed, options = {}) => sendOutput(invocation.responder, embed, options)
     };
 }
 
 async function runDiscordCommand(cmd, invocation) {
+    applyRank(invocation);
+
     const required = commandLevel(cmd);
 
     if (invocation.level < required) {
@@ -1226,13 +1417,11 @@ async function runDiscordCommand(cmd, invocation) {
     const ctx = buildDiscordContext(cmd, invocation);
 
     try {
-        const result = await cmd.execute(
-            invocation.message,
-            invocation.args,
-            bridge.client,
-            invocation.bot,
-            ctx
-        );
+        // commands/ take a single ctx; the old discordcommands/ took
+        // (msg, args, client, bot). Keep both working.
+        const result = cmd.execute.length >= 4
+            ? await cmd.execute(invocation.message, invocation.args, bridge.client, invocation.bot, ctx)
+            : await cmd.execute(ctx);
 
         await sendOutput(invocation.responder, result, {
             title: 'Command response',
@@ -1325,30 +1514,7 @@ function buildMinecraftContext(cmd, invocation) {
         commandsDir: path.join(process.cwd(), 'commands'),
         core: bot?.core,
 
-        run: command => {
-            const text = String(command);
-
-            const match = /^\/?tellraw\s+\S+\s+([\s\S]+)$/i.exec(text);
-
-            if (match) {
-                let component;
-
-                try {
-                    component = JSON.parse(match[1]);
-                } catch {
-                    try {
-                        component = parseSNBT(match[1]);
-                    } catch {
-                        component = match[1];
-                    }
-                }
-
-                send(toPlain(component));
-                return true;
-            }
-
-            return runCore(bot, text);
-        },
+        run: command => runWithTellrawCapture(bot, send, command),
 
         tellraw: (who, value) => {
             send(toPlain(value));
@@ -1459,6 +1625,8 @@ async function handlePrefixCommand(message, name, args) {
         bot: defaultBot(message.channel.id)
     };
 
+    applyRank(invocation);
+
     const linked = linkedBot(message.channel.id);
     const dedicated = commandsChannelId();
     const inCommandsChannel = Boolean(dedicated) && String(message.channel.id) === dedicated;
@@ -1471,7 +1639,7 @@ async function handlePrefixCommand(message, name, args) {
     }
 
     if (name === 'mc' || name === 'minecraft') {
-        let target = invocation.bot;
+        let target = defaultBot(message.channel.id);
         let words = [...args];
 
         if (words.length > 1) {
@@ -1591,6 +1759,8 @@ async function handleInteraction(interaction) {
         responder,
         bot: defaultBot(interaction.channelId)
     };
+
+    applyRank(invocation);
 
     try {
         if (name === 'mc') {
@@ -1903,6 +2073,12 @@ module.exports._internal = {
     LEVELS,
     requiredLevel,
     rankOf,
+    applyRank,
+    runDiscordCommand,
+    buildDiscordContext,
+    botContext,
+    commandMapFor,
+    playerLevelFor,
     splitText,
     stripMarkdown,
     formatMentions,
