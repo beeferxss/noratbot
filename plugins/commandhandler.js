@@ -163,9 +163,6 @@ function configuredLevel(name) {
 
 async function exec(cmdName, args, raw, msg, player) {
     const cmd = registry.get(String(cmdName).toLowerCase());
-    if (cmd && bot.clickTokens && typeof bot.clickTokens.invalidate === 'function') {
-        bot.clickTokens.invalidate(cmd.name);
-    }
     if (!cmd) {
         if (player) {
             const prefix = prefixes[0] || 'nr:';

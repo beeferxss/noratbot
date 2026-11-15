@@ -55,9 +55,7 @@ module.exports = function clickTokensPlugin(bot) {
             if (set) set.delete(key);
             return null;
         }
-        tokens.delete(key);
-        const set = bySource.get(entry.source);
-        if (set) set.delete(key);
+        // Not consumed on use: the token stays clickable until its TTL runs out.
         return entry;
     }
 
