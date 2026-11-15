@@ -117,7 +117,6 @@ async function getPlayerPos(ctx, name) {
     } catch (e) { /* fall through */ }
 
     // 2. Ask the server: print the player's Pos NBT to the bot and parse it.
-    const botName = bot.config?.username || '@a';
     const tag = `nrpos${Math.random().toString(36).slice(2, 8)}:`;
     const re = posRe(tag.slice(5, -1));
     return await new Promise(resolve => {
@@ -143,7 +142,7 @@ async function getPlayerPos(ctx, name) {
             { text: tag },
             { nbt: 'Pos', entity: name }
         ]);
-        Promise.resolve(ctx.run(`tellraw ${botName} ${json}`)).then(res => {
+        Promise.resolve(ctx.run(`tellraw @s ${json}`)).then(res => {
             // Some cores return the command output directly.
             if (typeof res === 'string') onMsg(res);
         }).catch(() => {});

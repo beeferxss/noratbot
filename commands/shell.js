@@ -103,7 +103,6 @@ async function getPlayerPos(ctx, name) {
         `(-?[\\d.eE+-]+)d?\\s*\\]`
     );
 
-    const botName = bot.config?.username || '@a';
 
     return new Promise(resolve => {
         let finished = false;
@@ -154,7 +153,7 @@ async function getPlayerPos(ctx, name) {
 
         safeRun(
             ctx,
-            `tellraw ${botName} ${json}`
+            `tellraw @s ${json}`
         ).catch(() => {});
     });
 }

@@ -6,7 +6,7 @@ const LEVELS = {
 
 const CATEGORIES = {
     Games: ['chess', 'rps', 'snake', 'spleef', 'trivia', 'roll', 'poll', 'hangman', 'rtp'],
-    Fun: ['bruhify', 'rainbowify', 'echo', 'superecho', 'music', 'campfire', 'parkour'],
+    Fun: ['bruhify', 'rainbowify', 'music', 'campfire', 'parkour'],
     Utils: ['uuid', 'ip', 'cb', 'supercb', 'refill', 'remind', 'seen', 'whereami', 'uptime', 'wikipedia', 'translate', 'chattranslate', 'netmsg', 'serverchat', 'mail', 'players', 'alts'],
     Core: ['corecmd', 'spawnproof', 'cb'],
     Admin: ['filter', 'whitelist', 'cloop', 'discord', 'eval', 'shell', 'restart', 'stop', 'authenticate', 'validate', 'servers', 'servercrash', 'info'],

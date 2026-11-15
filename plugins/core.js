@@ -11,7 +11,7 @@ module.exports = function core(bot) {
 
     const ENABLED = cfg.enabled !== false;
     const VERSION = bot.config?.version || '1.21.11';
-    const SIZE = Number.isFinite(Number(area.size)) ? Number(area.size) : 16;
+    const SIZE = Number.isFinite(Number(area.size)) ? Number(area.size) : 9;
     const Y = Number.isFinite(Number(area.y)) ? Number(area.y) : 30;
     const HIDE = cfg.hide === true;
     const WORLD_BORDER = Number.isFinite(Number(cfg.worldBorder)) ? Math.max(SIZE, Number(cfg.worldBorder)) : 29999984;

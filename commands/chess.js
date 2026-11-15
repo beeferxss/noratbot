@@ -125,7 +125,6 @@ function getPlayerPos(ctx, name) {
   const regex = new RegExp(
     `${tag}\\s*\\[\\s*(-?[\\d.eE+-]+)d?\\s*,\\s*(-?[\\d.eE+-]+)d?\\s*,\\s*(-?[\\d.eE+-]+)d?\\s*\\]`
   );
-  const botName = bot.config?.username || '@a';
 
   return new Promise((resolve) => {
     let done = false;
@@ -145,7 +144,7 @@ function getPlayerPos(ctx, name) {
     };
     const timer = setTimeout(() => finish(null), 3000);
     bot.on('chat_plain', onMessage);
-    run(ctx, `tellraw ${botName} ${JSON.stringify([{ text: tag }, { nbt: 'Pos', entity: name }])}`).catch(() => {});
+    run(ctx, `tellraw @s ${JSON.stringify([{ text: tag }, { nbt: 'Pos', entity: name }])}`).catch(() => {});
   });
 }
 
