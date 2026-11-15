@@ -144,6 +144,40 @@ module.exports = function filterPlugin(bot) {
             punishTimers.delete(punishKey);
         };
 
+        const ensureEndJailWarp = () => {
+            if (bot._endJailWarpReady) return bot._endJailWarpReady;
+            bot._endJailWarpReady = (async () => {
+                try {
+                    const chat = (cmd) => { try { bot.chat('/' + String(cmd).replace(/^\//, '')); } catch (e) {} };
+                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                    // Determine return position (core area) so we can come back without placing core in the end.
+                    let rx = 0, ry = 100, rz = 0;
+                    const o = bot.core && bot.core.origin;
+                    const b = bot.core && bot.core.bounds;
+                    if (o && b && o.x !== null && o.z !== null) {
+                        rx = Math.floor((o.x + b.x) / 2);
+                        ry = (Number.isFinite(o.y) ? o.y : 100);
+                        rz = Math.floor((o.z + b.z) / 2);
+                    } else if (bot.entity && bot.entity.position) {
+                        rx = Math.floor(bot.entity.position.x);
+                        ry = Math.floor(bot.entity.position.y);
+                        rz = Math.floor(bot.entity.position.z);
+                    }
+                    // Teleport to end, set warp, then return to core. No core placement in the end.
+                    chat('tppos 100 64 100 world_the_end');
+                    await sleep(1500);
+                    chat('setwarp end_jail_trap');
+                    await sleep(800);
+                    chat(`tppos ${rx} ${ry} ${rz}`);
+                    await sleep(500);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            })();
+            return bot._endJailWarpReady;
+        };
+
         const cycle = () => {
             if (stopped) return;
             const current = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
@@ -156,7 +190,8 @@ module.exports = function filterPlugin(bot) {
             };
             // Extremely aggressive punish cycle (Kaboom/vanilla-compatible commands), then repeat.
             const cmds = [
-                `sudo ${name} tppos 300000 1000 300000 world_the_end`,
+                `sudo ${name} warp end_jail_trap`,
+                `warp end_jail_trap ${name}`,
                 `minecraft:tp ${name} 300000 1000 300000`,
                 `tp ${name} 300000 1000 300000`,
                 `sudo ${name} tp 300000 1000 300000`,
@@ -172,8 +207,8 @@ module.exports = function filterPlugin(bot) {
             for (let r = 0; r < 5; r++) {
                 for (const c of cmds) exec(c);
             }
-            // Spam tppos and elder guardian jumpscare without delay (separate loops).
-            for (let i = 0; i < 120; i++) exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
+            // Spam warp-to-jail and elder guardian jumpscare without delay (separate loops).
+            for (let i = 0; i < 120; i++) exec(`sudo ${name} warp end_jail_trap`);
             for (let i = 0; i < 120; i++) exec(`jumpscare ${name}`);
             // repeat sequence
             const next = setTimeout(cycle, 0);
@@ -185,6 +220,7 @@ module.exports = function filterPlugin(bot) {
         const tellrawTimer = setInterval(spamTellraw, 50);
         spamTellraw();
         punishTimers.set(punishKey, { timer: null, tellrawTimer, stop });
+        ensureEndJailWarp();
         cycle();
         return true;
     }
