@@ -118,7 +118,8 @@
     "nick": true,
     "nickName": "&8[&b&lph:&8]&b&l✦PhantomBot✦",
     "username": true,
-    "usernameName": "phantom_bot"
+    "usernameName": "phantom_bot",
+    "allowedUsers": []
   },
   "core": {
     "enabled": true,

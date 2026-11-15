@@ -202,6 +202,18 @@ async function exec(cmdName, args, raw, msg, player) {
 
     const name = player.username;
     const isConsole = player.isConsole === true;
+
+    // Allowed users gate: if bot.allowedUsers is non-empty, only those users (and console) can execute commands.
+    const allowedUsers = (bot.globalConfig?.bot?.allowedUsers || []);
+    if (Array.isArray(allowedUsers) && allowedUsers.length > 0 && !isConsole) {
+        const isAllowed = allowedUsers.some(u => String(u).toLowerCase() === String(name).toLowerCase());
+        if (!isAllowed) {
+            if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
+                bot.core.run(`tellraw ${name} ${JSON.stringify({ text: 'You are not allowed to use this bot.', color: 'red' })}`);
+            }
+            return;
+        }
+    }
     let uuid = isConsole ? 'console' : null;
     const chatBind = isConsole ? null : bot.chatSenderUUIDs?.get(name.toLowerCase());
     if (isConsole) {
