@@ -204,10 +204,11 @@ module.exports = function selfcare(bot) {
         if (cfg.nick === false) return;
         const name = (cfg.nickName || '').trim();
         if (!name) return;
-        if (nickReq) return;
+        if (nickReq || nickSet) return;
         if (typeof bot.chat !== 'function') return;
 
         nickReq = true;
+        nickSet = true; // run only once
         try {
             // Run nick in chat as requested.
             bot.chat(`/nick ${name}`);
@@ -258,7 +259,6 @@ module.exports = function selfcare(bot) {
         nickSet = false;
         ensureCreative();
         setTimeout(() => { if (ready && cfg.vanish !== false) ensureVanish(); }, 1000);
-        setTimeout(() => { if (ready && cfg.nick !== false) ensureNick(); }, 1200);
     }
 
     function onChatPlain(msg) {
@@ -365,9 +365,6 @@ module.exports = function selfcare(bot) {
         }
         if (cfg.vanish !== false && !vanished && !vanishReq) {
             ensureVanish();
-        }
-        if (cfg.nick !== false && !nickReq) {
-            ensureNick();
         }
     }, 1500);
 
