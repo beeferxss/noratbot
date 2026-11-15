@@ -204,9 +204,35 @@ module.exports = function core(bot) {
         }
     }
 
+    let nbtLib = null;
+    try {
+        nbtLib = require('prismarine-nbt');
+    } catch (e) {
+        nbtLib = null;
+    }
+
+    // A command block copies the BlockEntityTag of the item it was placed from,
+    // so carrying Command + auto here means the block autoruns the fill even if
+    // the follow-up update packet never lands (or is refused).
+    function coreBlockNbt(command) {
+        if (!nbtLib) return null;
+        try {
+            return nbtLib.comp({
+                BlockEntityTag: nbtLib.comp({
+                    Command: nbtLib.string(String(command).replace(/^\//, '')),
+                    auto: nbtLib.byte(1),
+                    TrackOutput: nbtLib.byte(0),
+                    UpdateLastExecution: nbtLib.byte(0)
+                })
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
     // Puts the core block into the selected hotbar slot with the creative slot
     // packet, so no /give with coordinates appears in the server log.
-    function holdCoreBlock() {
+    function holdCoreBlock(command) {
         const id = coreBlockItemId();
         if (!Number.isInteger(id)) {
             log(`No item id for ${BLOCK} in this version's data`);
@@ -215,9 +241,14 @@ module.exports = function core(bot) {
 
         const version = dataVersion();
         const Factory = itemFactory(version);
+        const nbt = command ? coreBlockNbt(command) : null;
         let item;
+        let carriedNbt = false;
         try {
-            item = Factory ? Factory.toNotch(new Factory(id, 1)) : { present: true, itemId: id, itemCount: 1 };
+            item = Factory
+                ? Factory.toNotch(new Factory(id, 1, nbt))
+                : { present: true, itemId: id, itemCount: 1 };
+            carriedNbt = !!(item && item.nbtData);
         } catch (e) {
             item = { present: true, itemId: id, itemCount: 1 };
         }
@@ -226,10 +257,10 @@ module.exports = function core(bot) {
             const hotbar = hotbarIndex();
             bot.write('set_creative_slot', { slot: HOTBAR_SLOT_START + hotbar, item });
             bot.write('held_item_slot', { slotId: hotbar });
-            return true;
+            return { held: true, nbt: carriedNbt };
         } catch (e) {
             console.error(`[${bot.id}] [Core] Could not hold ${BLOCK}:`, e.message || e);
-            return false;
+            return { held: false, nbt: false };
         }
     }
 
@@ -298,18 +329,25 @@ module.exports = function core(bot) {
         }
     }
 
-    // Destroys whatever sits at (x,y,z) and puts a command block holding `command`
-    // back in its place. Returns true once the command was written into it.
-    async function placeCommandBlockAt(x, y, z, command) {
+    // Clears (x,y,z) and puts the core block there, then writes the command into
+    // it. Returns the position it ended up at, or null.
+    async function tryPlaceAt(x, y, z, command, carriedNbt) {
         markOwn(x, y, z);
         sendAbilities();
 
-        await digAt(x, y, z);
-        if (!holdCoreBlock()) return false;
-        await sleep(120); // let the server apply the creative slot
-
+        // Break the cell and wait for its own block update first: that update is
+        // the baseline the placement confirmation is compared against, otherwise
+        // a dig reply arriving late would look like a successful placement.
         const id = key(x, y, z);
+        const beforeDig = blockChanges.get(id) || 0;
+        await digAt(x, y, z);
+        const digStart = Date.now();
+        while (Date.now() - digStart < 400 && (blockChanges.get(id) || 0) === beforeDig) {
+            await sleep(25);
+        }
         const mark = blockChanges.get(id) || 0;
+        const changedAfter = candidate => (blockChanges.get(candidate) || 0) > mark;
+
         const confirm = async timeout => {
             const started = Date.now();
             while (Date.now() - started < timeout) {
@@ -318,28 +356,74 @@ module.exports = function core(bot) {
             }
             return false;
         };
+        // The server places into the clicked cell when it is replaceable and on
+        // the clicked face otherwise, so an unexpected neighbouring change means
+        // the cell was not what we assumed - stop instead of scattering blocks.
+        const stray = () => changedAfter(key(x, y - 1, z)) || changedAfter(key(x, y + 1, z));
 
-        // 1) on the top face of the block below: air, or the hole just dug
-        sendBlockPlace({ x, y: y - 1, z }, 1);
-        let placed = await confirm(400);
-        // 2) into the cell itself: this is what replaces water/lava
+        // 1) into the cell itself: air after the dig, replaced water/lava, and a
+        //  still-solid cell (dig refused) lands above it instead - which the
+        // stray check below catches before a second packet is sent.
+        sendBlockPlace({ x, y, z }, 1);
+        let placed = await confirm(500);
+        if (!placed && stray()) {
+            log(`The core spot ${x} ${y} ${z} is still solid`);
+            return null;
+        }
+        // 2) on the top face of the block below
         if (!placed) {
-            sendBlockPlace({ x, y, z }, 1);
-            placed = await confirm(400);
+            sendBlockPlace({ x, y: y - 1, z }, 1);
+            placed = await confirm(500);
+            if (!placed && stray()) {
+                log(`The cell below ${x} ${y} ${z} was not solid`);
+                return null;
+            }
         }
         // 3) from the block above, looking down
         if (!placed) {
             sendBlockPlace({ x, y: y + 1, z }, 0);
-            placed = await confirm(400);
+            placed = await confirm(500);
         }
-
-        if (!placed) {
-            log(`Could not place the core block at ${x} ${y} ${z}`);
-            return false;
-        }
+        if (!placed) return null;
 
         markOwn(x, y, z);
-        return writeCoreCommand(x, y, z, command);
+        // The item already carries Command + auto where the version supports it;
+        // this covers the versions whose slot format drops item NBT.
+        if (!writeCoreCommand(x, y, z, command)) {
+            if (!carriedNbt) {
+                log(`Could not write the command into the core block at ${x} ${y} ${z}`);
+                return null;
+            }
+            log(`Command packet for ${x} ${y} ${z} failed; keeping the item NBT`);
+        }
+        return { x, y, z };
+    }
+
+    // The block under the bot's feet is the wanted spot, but a server can refuse
+    // it (spawn protection, the bot's own hitbox in the hole), so the neighbours
+    // are tried before giving up.
+    async function placeCommandBlockAt(x, y, z, command) {
+        const held = holdCoreBlock(command);
+        if (!held.held) return null;
+        await sleep(120); // let the server apply the creative slot
+
+        const candidates = [
+            { x, y, z },
+            { x: x + 1, y, z },
+            { x: x - 1, y, z },
+            { x, y, z: z + 1 },
+            { x, y, z: z - 1 }
+        ];
+
+        for (const candidate of candidates) {
+            if (inside(candidate.x, candidate.y, candidate.z)) continue;
+            const placed = await tryPlaceAt(candidate.x, candidate.y, candidate.z, command, held.nbt);
+            if (placed) return placed;
+            log(`No block at ${candidate.x} ${candidate.y} ${candidate.z}, trying the next spot`);
+        }
+
+        log(`Could not place the core block near ${x} ${y} ${z}`);
+        return null;
     }
 
     // A failed refill used to retry exactly once and then give up forever, which
@@ -461,8 +545,12 @@ module.exports = function core(bot) {
 
         if (seedReachable) {
             try {
-                success = await placeCommandBlockAt(seed.x, seed.y, seed.z, command);
-                if (success) log(`Core block placed at ${seed.x} ${seed.y} ${seed.z}`);
+                const placed = await placeCommandBlockAt(seed.x, seed.y, seed.z, command);
+                success = !!placed;
+                if (placed) {
+                    bot.core.seed = placed;
+                    log(`Core block placed at ${placed.x} ${placed.y} ${placed.z}`);
+                }
             } catch (error) {
                 success = false;
                 console.error(`[${bot.id}] [Core] Core block placement failed:`, error.message || error);
