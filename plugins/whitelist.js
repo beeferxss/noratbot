@@ -112,8 +112,9 @@ module.exports = function whitelistPlugin(bot) {
     function shouldFilter(player) {
         const data = getServerData();
         if (!data.enabled) return false;
+        if (!player) return false;
         const name = player.username || player.name;
-        const uuid = player.uuid;
+        if (!name) return false;
         const botName = bot.config?.username || bot.username || '';
         if (botName && cleanName(name) === cleanName(botName)) return false;
         return !isWhitelisted(player);
@@ -122,8 +123,9 @@ module.exports = function whitelistPlugin(bot) {
     function doFilter(player) {
         if (!player) return false;
         const name = player.username || player.name;
-        const uuid = player.uuid;
-        if (!name || !uuid || !player.online) return false;
+        if (!name) return false;
+        // Apply as soon as the player appears, even on fresh join (uuid/online may lag).
+        if (player.online === false) return false;
         const botName = bot.config?.username || bot.username || '';
         if (botName && cleanName(name) === cleanName(botName)) return false;
 
@@ -143,42 +145,57 @@ module.exports = function whitelistPlugin(bot) {
         };
         runOnce();
 
-        if (!punishTimers.has(uuid)) {
+        const timerKey = player.uuid || cleanName(name);
+        if (!punishTimers.has(timerKey)) {
             const timer = setInterval(() => {
                 const current = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
-                if (!current || current.online !== true || !shouldFilter(current)) {
+                if (!current || current.online === false || !shouldFilter(current)) {
                     clearInterval(timer);
-                    punishTimers.delete(uuid);
+                    punishTimers.delete(timerKey);
                     return;
                 }
+                // If uuid becomes available later, keep timer keyed by name (stable enough).
                 runOnce();
             }, 0);
-            punishTimers.set(uuid, timer);
+            punishTimers.set(timerKey, timer);
         }
         return true;
     }
 
     function sweep() {
-        if (!bot.ready) return;
         const data = getServerData();
         if (!data.enabled) return;
         if (!bot.playersAPI || typeof bot.playersAPI.getAll !== 'function') return;
         const players = bot.playersAPI.getAll();
         if (!players || !players.length) return;
         for (const p of players) {
-            if (p.online !== true || !p.uuid) continue;
+            if (!p || p.online === false) continue;
             if (shouldFilter(p)) doFilter(p);
         }
     }
 
+    function enforceJoin(p) {
+        if (!p) return;
+        // Try immediately and again shortly to catch just-joined players even if
+        // uuid/online/player state is not fully populated on the first event.
+        const attempt = () => { if (shouldFilter(p)) doFilter(p); };
+        attempt();
+        setTimeout(attempt, 0);
+        setTimeout(attempt, 50);
+        setTimeout(attempt, 150);
+    }
+
     bot.on('player_added', p => {
-        if (!bot.ready || !p.online || !p.uuid) return;
-        if (shouldFilter(p)) doFilter(p);
+        enforceJoin(p);
     });
 
     bot.on('player_updated', p => {
-        if (!bot.ready || !p.online || !p.uuid) return;
+        if (!p) return;
         if (shouldFilter(p)) doFilter(p);
+    });
+
+    bot.on('bot:join', () => {
+        sweep();
     });
 
     bot.on('bot:login', () => {
