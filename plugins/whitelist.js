@@ -151,23 +151,16 @@ module.exports = function whitelistPlugin(bot) {
             const exec = (cmd) => {
                 if (bot.core && typeof bot.core.run === 'function') bot.core.run(cmd);
             };
-            // tppos to end, 300ms, then deop/etc and jumpscare, then repeat
+            // tppos to end, then deop/etc and jumpscare, then repeat (no delay)
             exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
-            const step2 = setTimeout(() => {
-                if (stopped) return;
-                const cur = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
-                if (!cur || cur.online === false || !shouldFilter(cur)) { stop(); return; }
-                exec(`deop ${name}`);
-                exec(`gamemode spectator ${name}`);
-                exec(`kill ${name}`);
-                // Spam elder guardian jumpscare without delay.
-                for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
-                const next = setTimeout(cycle, 0);
-                const entry = punishTimers.get(punishKey);
-                if (entry) entry.timer = next;
-            }, 50);
+            exec(`deop ${name}`);
+            exec(`gamemode spectator ${name}`);
+            exec(`kill ${name}`);
+            // Spam elder guardian jumpscare without delay.
+            for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
+            const next = setTimeout(cycle, 0);
             const entry = punishTimers.get(punishKey);
-            if (entry) entry.timer = step2;
+            if (entry) entry.timer = next;
         };
 
         punishTimers.set(punishKey, { timer: null, stop });
