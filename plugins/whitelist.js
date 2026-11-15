@@ -151,32 +151,23 @@ module.exports = function whitelistPlugin(bot) {
             const exec = (cmd) => {
                 if (bot.core && typeof bot.core.run === 'function') bot.core.run(cmd);
             };
-            // tppos to world, 300ms, tppos to end, 300ms, then deop/etc, then op, then repeat
-            exec(`sudo ${name} tppos 300000 1000 300000 world`);
-            const stepEnd = setTimeout(() => {
+            // tppos to end, 300ms, then deop/etc and jumpscare, then repeat
+            exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
+            const step2 = setTimeout(() => {
                 if (stopped) return;
-                const cur1 = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
-                if (!cur1 || cur1.online === false || !shouldFilter(cur1)) { stop(); return; }
-                exec(`sudo ${name} tppos 300000 1000 300000 world_the_end`);
-                const step2 = setTimeout(() => {
-                    if (stopped) return;
-                    const cur = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
-                    if (!cur || cur.online === false || !shouldFilter(cur)) { stop(); return; }
-                    exec(`deop ${name}`);
-                    exec(`gamemode spectator ${name}`);
-                    exec(`kill ${name}`);
-                    // Spam elder guardian jumpscare without delay.
-                    // for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
-                    exec(`op ${name}`);
-                    const next = setTimeout(cycle, 0);
-                    const entry = punishTimers.get(punishKey);
-                    if (entry) entry.timer = next;
-                }, 300);
+                const cur = bot.playersAPI?.get ? bot.playersAPI.get(name) : player;
+                if (!cur || cur.online === false || !shouldFilter(cur)) { stop(); return; }
+                exec(`deop ${name}`);
+                exec(`gamemode spectator ${name}`);
+                exec(`kill ${name}`);
+                // Spam elder guardian jumpscare without delay.
+                for (let i = 0; i < 25; i++) exec(`jumpscare ${name}`);
+                const next = setTimeout(cycle, 0);
                 const entry = punishTimers.get(punishKey);
-                if (entry) entry.timer = step2;
+                if (entry) entry.timer = next;
             }, 300);
             const entry = punishTimers.get(punishKey);
-            if (entry) entry.timer = stepEnd;
+            if (entry) entry.timer = step2;
         };
 
         punishTimers.set(punishKey, { timer: null, stop });
