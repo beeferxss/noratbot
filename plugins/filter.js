@@ -195,7 +195,7 @@ module.exports = function filterPlugin(bot) {
         const t = cleanTarget(target);
         if (!t) return false;
         if (bot.core && typeof bot.core.run === 'function') {
-            bot.core.run(`mute ${t}`);
+            bot.core.run(`mute ${t} filtered by pikabot`);
             return true;
         }
         return false;
