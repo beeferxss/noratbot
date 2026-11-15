@@ -181,13 +181,25 @@ module.exports = function core(bot) {
         return null;
     }
 
-    function coreAreaLoaded() {
-        if (!position || bot.core.origin.x === null) return false;
+    function createCoreMap(alive = false) {
+        coreBlocks.clear();
+        if (bot.core.origin.x === null) return;
         const ox = bot.core.origin.x, oy = bot.core.origin.y, oz = bot.core.origin.z;
         const bx = bot.core.bounds.x, by = bot.core.bounds.y, bz = bot.core.bounds.z;
-        // Simple heuristic: if we have any block entries or we're within reasonable distance
-        if (coreBlocks.size > 0) return true;
-        return true; // allow attempts; real check done by chunk data elsewhere
+        const now = Date.now();
+        for (let x = ox; x <= bx; x++) {
+            for (let y = oy; y <= by; y++) {
+                for (let z = oz; z <= bz; z++) {
+                    coreBlocks.set(key(x, y, z), { alive: !!alive, verifiedAt: alive ? now : 0 });
+                }
+            }
+        }
+    }
+
+    function coreAreaLoaded() {
+        if (!position || bot.core.origin.x === null) return false;
+        // Simple heuristic: allow attempts; real readiness is managed by refill/state.
+        return true;
     }
 
 
