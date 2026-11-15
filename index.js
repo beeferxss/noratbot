@@ -64,57 +64,13 @@ const servers = Array.isArray(config?.minecraft?.servers)
 
 global.botInitializing = true;
 
-function isAntiFilterEnabled(server) {
-    const g = config?.bot?.antiFilter;
-    const s = server?.antiFilter;
-    if (s === true || (s && typeof s === 'object' && s.enabled === true)) return true;
-    if (s === false || (s && typeof s === 'object' && s.enabled === false)) return false;
-    return g === true || (g && typeof g === 'object' && g.enabled === true);
-}
-
-function randomName(prefix = 'Bot') {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let out = prefix;
-    for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    return out;
-}
-
-function buildAntiFilterPair(server) {
-    const baseId = String(server.id || '').trim() || 'bot';
-    // Controller: random name, vanished, does everything (commands/core/chat).
-    const controller = JSON.parse(JSON.stringify(server));
-    controller.id = `${baseId}-ctl`;
-    controller.username = 'random';
-    controller._antiFilterRole = 'controller';
-    controller._antiFilterPair = baseId;
-    // Decoy: visible bot, keeps configured name behavior (nick via selfcare) and can fill core.
-    const decoy = JSON.parse(JSON.stringify(server));
-    decoy.id = `${baseId}-decoy`;
-    // Take name from config when explicitly set; else random-looking placeholder (nick will be applied).
-    decoy.username = (typeof server.decoyUsername === 'string' && server.decoyUsername.trim()) ? server.decoyUsername.trim()
-        : (typeof server.username === 'string' && server.username.trim() && server.username.trim().toLowerCase() !== 'random') ? server.username.trim()
-        : randomName('Decoy');
-    decoy._antiFilterRole = 'decoy';
-    decoy._antiFilterPair = baseId;
-    return { controller, decoy };
-}
-
 async function startBotsWithDelay() {
-    const delayMs = 500;
+    const delayMs = 500; 
     for (const server of servers) {
         if (!server || server.enabled !== true) continue;
         try {
-            if (isAntiFilterEnabled(server)) {
-                const { controller, decoy } = buildAntiFilterPair(server);
-                manager.create(controller);
-                console.log(`[Manager] Created ${controller.id} (anti-filter controller)`);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-                manager.create(decoy);
-                console.log(`[Manager] Created ${decoy.id} (anti-filter decoy)`);
-            } else {
-                manager.create(server);
-                console.log(`[Manager] Created ${server.id}`);
-            }
+            manager.create(server);
+            console.log(`[Manager] Created ${server.id}`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         } catch (error) {
             console.error(`[Manager] Failed to create ${server.id}:`, error);

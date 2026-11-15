@@ -99,10 +99,6 @@ class BotInstance extends EventEmitter {
         this.probeTimeout = Math.min(15000, Math.max(500, Number(this.globalConfig?.proxy?.probeTimeout) || 3000));
         this.probeCandidates = Math.min(25, Math.max(1, Number(this.globalConfig?.proxy?.probeCandidates) || 6));
         this.fallbackDirect = this.globalConfig?.proxy?.fallbackDirect !== false;
-
-        // Anti-filter pairing roles: 'controller' (hidden, does everything) or 'decoy' (visible, minimal).
-        this.antiFilterRole = this.config._antiFilterRole || null;
-        this.antiFilterPair = this.config._antiFilterPair || null;
     }
 
     log(message) {
@@ -460,12 +456,7 @@ class BotInstance extends EventEmitter {
             fs.mkdirSync(pluginsDir, { recursive: true });
             return;
         }
-        let files = fs.readdirSync(pluginsDir).filter(file => file.endsWith('.js'));
-        // Anti-filter decoy: visible presence only (nick/selfcare). Controller does everything.
-        if (this.antiFilterRole === 'decoy') {
-            const allow = new Set(['selfcare.js', 'players.js']);
-            files = files.filter(f => allow.has(f));
-        }
+        const files = fs.readdirSync(pluginsDir).filter(file => file.endsWith('.js'));
         for (const file of files) {
             const pluginPath = path.join(pluginsDir, file);
             try {

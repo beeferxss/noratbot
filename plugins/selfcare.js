@@ -25,21 +25,12 @@ module.exports = function selfcare(bot) {
     let vanishReq = false;
     let nickReq = false;
     let nickSet = false;
+    let usernameReq = false;
+    let usernameSet = false;
 
     let ready = false;
     let timer = null;
-    const baseCfg = bot.globalConfig?.bot || {};
-    const cfg = Object.assign({}, baseCfg);
-    if (bot.antiFilterRole === 'controller') {
-        // Controller must be vanished and act as the real bot.
-        cfg.vanish = true;
-    } else if (bot.antiFilterRole === 'decoy') {
-        // Decoy is the visible/nicked presence; avoid vanish/command spy/op/gamemode enforcement.
-        cfg.vanish = false;
-        cfg.commandSpy = false;
-        cfg.creative = false;
-        cfg.nick = (baseCfg.nick === false) ? false : true;
-    }
+    const cfg = bot.globalConfig?.bot || {};
 
 
 
@@ -87,7 +78,6 @@ module.exports = function selfcare(bot) {
     }
 
     function onOpChange(pkt) {
-        if (bot.antiFilterRole === 'decoy') return;
         if (!pkt || typeof pkt.entityStatus !== 'number') return;
         const status = Number(pkt.entityStatus);
         if (status < 24 || status > 28) return;
@@ -113,7 +103,6 @@ module.exports = function selfcare(bot) {
     }
 
     function askOp() {
-        if (bot.antiFilterRole === 'decoy') return;
         if (!ready) return;
         if (opLevel !== 0) return;
         if (opReq) return;
@@ -132,7 +121,6 @@ module.exports = function selfcare(bot) {
     }
 
     function ensureCreative() {
-        if (bot.antiFilterRole === 'decoy') return;
         if (!ready) return;
         if (cfg.creative === false) return;
         if (gm === null) return;
@@ -232,6 +220,25 @@ module.exports = function selfcare(bot) {
         }, RETRY_DELAY);
     }
 
+    function ensureUsername() {
+        if (!ready) return;
+        if (cfg.username === false) return;
+        const name = (cfg.usernameName || '').trim();
+        if (!name) return;
+        if (usernameReq || usernameSet) return;
+        if (typeof bot.chat !== 'function') return;
+
+        usernameReq = true;
+        usernameSet = true; // run only once
+        try {
+            // Run username in chat as requested.
+            bot.chat(`/username ${name}`);
+        } catch (e) {}
+        setTimeout(() => {
+            usernameReq = false;
+        }, RETRY_DELAY);
+    }
+
     function onLogin() {
         opLevel = 0;
         gm = null;
@@ -245,6 +252,8 @@ module.exports = function selfcare(bot) {
         vanishReq = false;
         nickReq = false;
         nickSet = false;
+        usernameReq = false;
+        usernameSet = false;
         ready = true;
 
         setTimeout(() => {
@@ -253,6 +262,7 @@ module.exports = function selfcare(bot) {
             if (cfg.creative !== false) askOp();
             if (cfg.vanish !== false) ensureVanish();
             if (cfg.nick !== false) ensureNick();
+            if (cfg.username !== false) ensureUsername();
         }, 1500);
     }
 
@@ -271,6 +281,8 @@ module.exports = function selfcare(bot) {
         vanishReq = false;
         nickReq = false;
         nickSet = false;
+        usernameReq = false;
+        usernameSet = false;
         ensureCreative();
         setTimeout(() => { if (ready && cfg.vanish !== false) ensureVanish(); }, 1000);
     }
@@ -394,6 +406,7 @@ module.exports = function selfcare(bot) {
         enableCommandSpy: enableSpy,
         execute: run,
         ensureVanish,
-        ensureNick
+        ensureNick,
+        ensureUsername
     };
 };

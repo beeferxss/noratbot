@@ -116,7 +116,9 @@
       "trusted": []
     },
     "nick": true,
-    "nickName": "&8[&d&l-wb:&8]&d&l♡WomenBot♡"
+    "nickName": "&8[&d&l-wb:&8]&d&l♡WomenBot♡",
+    "username": true,
+    "usernameName": "women_bot"
   },
   "core": {
     "enabled": true,
