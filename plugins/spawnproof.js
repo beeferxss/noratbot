@@ -28,15 +28,31 @@ module.exports = function spawnproofPlugin(bot) {
         return x >= ox && x <= bounds.x && y >= oy && y <= bounds.y && z >= oz && z <= bounds.z;
     }
 
+    // Prefer the core, which writes the command into a command block without a
+    // chat line; fall back to chat only with the leading slash attached.
+    function runCommand(cmd) {
+        const command = String(cmd === undefined || cmd === null ? '' : cmd).replace(/^\//, '').trim();
+        if (!command) return false;
+        if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
+            const result = bot.core.run(command);
+            if (result !== false) return true;
+        }
+        if (typeof bot.chat !== 'function') return false;
+        try {
+            bot.chat('/' + command);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function scheduleRestore() {
         if (restoring) return;
         if (cooldown) { damagePending = true; return; }
         restoring = true;
         cooldown = true;
         const cmd = `clone ${bx} ${by} ${bz} ${bBounds.x} ${bBounds.y} ${bBounds.z} ${ox} ${oy} ${oz} replace`;
-        try {
-            bot.chat('/' + cmd);
-        } catch (e) {}
+        runCommand(cmd);
         setTimeout(() => {
             restoring = false;
             cooldown = false;
@@ -60,11 +76,8 @@ module.exports = function spawnproofPlugin(bot) {
         if (initialized) return;
         initialized = true;
         // Create backup copy.
-        try {
-            const cmd = `clone ${ox} ${oy} ${oz} ${bounds.x} ${bounds.y} ${bounds.z} ${bx} ${by} ${bz} replace`;
-            bot.chat('/' + cmd);
-            backupReady = true;
-        } catch (e) {}
+        const cmd = `clone ${ox} ${oy} ${oz} ${bounds.x} ${bounds.y} ${bounds.z} ${bx} ${by} ${bz} replace`;
+        backupReady = runCommand(cmd);
     }
 
     bot.on('block_change', onBlockChange);
@@ -77,12 +90,9 @@ module.exports = function spawnproofPlugin(bot) {
         backup: { bx, by, bz, bounds: bBounds },
         restore: () => scheduleRestore(),
         backupNow: () => {
-            try {
-                const cmd = `clone ${ox} ${oy} ${oz} ${bounds.x} ${bounds.y} ${bounds.z} ${bx} ${by} ${bz} replace`;
-                bot.chat('/' + cmd);
-                backupReady = true;
-                return true;
-            } catch (e) { return false; }
+            const cmd = `clone ${ox} ${oy} ${oz} ${bounds.x} ${bounds.y} ${bounds.z} ${bx} ${by} ${bz} replace`;
+            backupReady = runCommand(cmd);
+            return backupReady;
         }
     };
 };

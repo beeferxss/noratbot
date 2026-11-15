@@ -241,15 +241,20 @@ async function exec(cmdName, args, raw, msg, player) {
         commandsDir: cmdsDir,
         core: bot.core,
         run(cmd) {
+            // Chat is only a last resort, and it always gets the slash: commands
+            // like "setblock ..." without one are sent as a chat message instead
+            // of being executed.
+            const command = String(cmd === undefined || cmd === null ? '' : cmd).replace(/^\//, '').trim();
+            if (!command) return false;
             if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
-                console.log(`[${bot.id}] [CommandHandler] core not ready for run(); falling back to bot.chat: ${cmd}`);
-                if (typeof bot.chat === 'function') return bot.chat(String(cmd));
+                console.log(`[${bot.id}] [CommandHandler] core not ready for run(); falling back to bot.chat: ${command}`);
+                if (typeof bot.chat === 'function') return bot.chat('/' + command);
                 return false;
             }
-            const result = bot.core.run(cmd);
+            const result = bot.core.run(command);
             if (!result) {
-                console.log(`[${bot.id}] [CommandHandler] core.run() returned false for: ${cmd}; falling back to bot.chat`);
-                if (typeof bot.chat === 'function') return bot.chat(String(cmd));
+                console.log(`[${bot.id}] [CommandHandler] core.run() returned false for: ${command}; falling back to bot.chat`);
+                if (typeof bot.chat === 'function') return bot.chat('/' + command);
             }
             return result;
         },
@@ -261,8 +266,8 @@ async function exec(cmdName, args, raw, msg, player) {
             if (!bot.core || typeof bot.core.run !== 'function' || !bot.core.ready) {
                 console.log(`[${bot.id}] [CommandHandler] core not ready for tellraw; falling back to bot.chat`);
                 const transformed = this.transformClicks(text);
-                const plain = typeof transformed === 'string' ? transformed : JSON.stringify(transformed);
-                if (typeof bot.chat === 'function') return bot.chat(String(plain));
+                const json = typeof transformed === 'string' ? JSON.stringify({ text: transformed }) : JSON.stringify(transformed);
+                if (typeof bot.chat === 'function') return bot.chat(`/tellraw ${target} ${json}`);
                 return false;
             }
             const transformed = this.transformClicks(text);

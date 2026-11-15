@@ -50,12 +50,22 @@ module.exports = function selfcare(bot) {
         });
     }
 
+    // Prefer the core's command block (no chat line, no missing slash) and only
+    // fall back to a slash-prefixed chat command when it is not ready.
     function run(cmd) {
+        const command = String(cmd === undefined || cmd === null ? '' : cmd).replace(/^\//, '').trim();
+        if (!command) return false;
+
+        if (bot.core && typeof bot.core.run === 'function' && bot.core.ready) {
+            const result = bot.core.run(command);
+            if (result !== false) return true;
+        }
+
         if (typeof bot.chat !== 'function') {
             return false;
         }
         try {
-            bot.chat(cmd);
+            bot.chat('/' + command);
             return true;
         } catch (e) {
             console.error(`[${bot.id}] [SelfCare] Command error:`, e);
