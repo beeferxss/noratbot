@@ -1254,43 +1254,4 @@ module.exports = function core(bot) {
             this._cursor = { x: null, y: Y, z: null };
         }
     };
-
-    // Allowed users: filter tellraw output so only allowed users see it.
-    // If bot.allowedUsers is empty/non-array, everyone sees output (default).
-    (function wrapTellraw() {
-        const allowed = bot.globalConfig?.bot?.allowedUsers || bot.config?.allowedUsers;
-        if (!Array.isArray(allowed) || allowed.length === 0) return;
-        const allowedLower = allowed.map(u => String(u).toLowerCase());
-        const originalRun = bot.core.run.bind(bot.core);
-        bot.core.run = function(command) {
-            const cmd = String(command === undefined || command === null ? '' : command).trim();
-            // Match simple tellraw commands: tellraw <target> <payload>
-            const m = cmd.match(/^tellraw\s+(\S+)\s+([\s\S]+)$/i);
-            if (m) {
-                const target = m[1];
-                const payload = m[2];
-                const tLower = target.toLowerCase();
-                if (tLower === '@a' || tLower === '@e' || tLower === '@r') {
-                    // Broadcast: send to each allowed user instead
-                    let anyOk = false;
-                    for (const u of allowed) {
-                        if (originalRun(`tellraw ${u} ${payload}`)) anyOk = true;
-                    }
-                    return anyOk;
-                }
-                if (tLower === '@s' || tLower === '@p') {
-                    // executor/nearest player: leave as-is
-                    return originalRun(cmd);
-                }
-                // Specific player target: only if allowed
-                if (allowedLower.includes(tLower)) {
-                    return originalRun(cmd);
-                }
-                // Not allowed -> skip
-                return false;
-            }
-            return originalRun(cmd);
-        };
-        // Also wrap runTracked since it calls this.run internally (already wrapped via this.run)
-    })();
 };

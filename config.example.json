@@ -118,8 +118,7 @@
     "nick": true,
     "nickName": "&8[&b&lph:&8]&b&l✦PhantomBot✦",
     "username": true,
-    "usernameName": "phantom_bot",
-    "allowedUsers": []
+    "usernameName": "phantom_bot"
   },
   "core": {
     "enabled": true,
