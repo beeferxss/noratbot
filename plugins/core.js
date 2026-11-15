@@ -150,83 +150,474 @@ module.exports = function core(bot) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    function markBlock(x, y, z, alive, damage = false) {
-        if (!inside(x, y, z)) return;
-        const k = key(x, y, z);
-        const now = Date.now();
-        let entry = coreBlocks.get(k);
-        if (!entry) {
-            entry = { alive: !!alive, verifiedAt: alive ? now : 0 };
-            coreBlocks.set(k, entry);
-        } else {
-            entry.alive = !!alive;
-            entry.verifiedAt = now;
-        }
-        if (damage && alive === false) {
-            scheduleDamage('block-removed');
+    // This bot speaks minecraft-protocol directly - there is no mineflayer, so
+    // no bot.creative / bot.blockAt / bot.heldItem. Everything below is packets.
+    const HOTBAR_SLOT_START = 36;
+
+    function hotbarIndex() {
+        return Math.max(0, Math.min(8, Number(bot.quickBarSlot) || 0));
+    }
+
+    let ItemFactory = null;
+    let ItemFactoryVersion = null;
+    function itemFactory(version) {
+        if (ItemFactory && ItemFactoryVersion === version) return ItemFactory;
+        try {
+            ItemFactory = require('prismarine-item')(version);
+            ItemFactoryVersion = version;
+            return ItemFactory;
+        } catch (e) {
+            return null;
         }
     }
 
-    function getRecentlyVerifiedSurvivor() {
-        const now = Date.now();
-        for (const [k, entry] of coreBlocks) {
-            if (!entry || !entry.alive) continue;
-            if (typeof entry.verifiedAt !== 'number' || now - entry.verifiedAt > SURVIVOR_MAX_AGE) continue;
-            const parts = k.split(':');
-            if (parts.length !== 3) continue;
-            const x = Number(parts[0]), y = Number(parts[1]), z = Number(parts[2]);
-            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
-            return { x, y, z };
+    // The creative slot packet wants an *item* id. A block id is not one, so only
+    // fall back to the block tables (minecraft-data included) when the bot's own
+    // registry has no item entry for the core block.
+    function coreBlockItemId() {
+        const registryId = bot.registry?.itemsByName?.[BLOCK]?.id;
+        if (Number.isInteger(registryId)) return registryId;
+
+        const data = dataFor(dataVersion()) || mcData;
+
+        const item = data?.itemsByName?.[BLOCK];
+        if (item && Number.isInteger(item.id)) return item.id;
+
+        const block = bot.registry?.blocksByName?.[BLOCK] || data?.blocksByName?.[BLOCK];
+        if (block) {
+            const viaItems = data?.items?.[block.id];
+            if (viaItems && viaItems.name === BLOCK) return viaItems.id;
         }
+
+        const scanned = Array.isArray(data?.itemsArray)
+            ? data.itemsArray.find(entry => entry.name === BLOCK)
+            : null;
+        return scanned && Number.isInteger(scanned.id) ? scanned.id : null;
+    }
+
+    // Flying keeps the bot from dropping when the block under it is broken.
+    function sendAbilities() {
+        try {
+            return bot.write('abilities', { flags: 0x02 }) !== false; // 0x02 = flying
+        } catch (e) {
+            return false;
+        }
+    }
+
+    let nbtLib = null;
+    try {
+        nbtLib = require('prismarine-nbt');
+    } catch (e) {
+        nbtLib = null;
+    }
+
+    // A command block copies the block entity data of the item it was placed
+    // from, so carrying Command + auto here means the block autoruns the fill
+    // even if the follow-up update packet never lands (or is refused).
+    function coreBlockEntityNbt(command) {
+        if (!nbtLib) return null;
+        try {
+            return nbtLib.comp({
+                id: nbtLib.string('command_block'),
+                Command: nbtLib.string(String(command).replace(/^\//, '')),
+                auto: nbtLib.byte(1),
+                TrackOutput: nbtLib.byte(0),
+                UpdateLastExecution: nbtLib.byte(0)
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Pre-1.20.5 items carry that compound as BlockEntityTag; from 1.20.5 it is
+    // the minecraft:block_entity_data component instead.
+    function legacyCoreBlockNbt(command) {
+        const tag = coreBlockEntityNbt(command);
+        if (!tag) return null;
+        try {
+            const body = nbtLib.comp({ ...tag.value });
+            delete body.value.id;
+            return nbtLib.comp({ BlockEntityTag: body });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // The block entity type is a registry id in the 1.21.11+ component, and the
+    // only place to learn it is the server's own configuration registries.
+    let commandBlockEntityType = null;
+    function onRegistryData(packet) {
+        if (commandBlockEntityType !== null || !packet) return;
+        const registry = String(packet.id || packet.name || '');
+        if (!/block_entity_type/.test(registry)) return;
+        const entries = Array.isArray(packet.entries) ? packet.entries : [];
+        const index = entries.findIndex(entry => /(^|:)command_block$/.test(String(entry?.key || entry?.name || '')));
+        if (index >= 0) {
+            commandBlockEntityType = index;
+            log(`Command block entity type id ${index} (${registry})`);
+        }
+    }
+    bot.on('registry_data', onRegistryData);
+
+    function varintBytes(value) {
+        const bytes = [];
+        let v = Number(value) >>> 0;
+        do {
+            let b = v & 0x7f;
+            v >>>= 7;
+            if (v) b |= 0x80;
+            bytes.push(b);
+        } while (v);
+        return Buffer.from(bytes);
+    }
+
+    function encodeNbt(value) {
+        if (!nbtLib?.proto) return null;
+        try {
+            const size = nbtLib.proto.sizeOf(value, 'anonymousNbt');
+            const buffer = Buffer.alloc(size);
+            nbtLib.proto.write(value, buffer, 0, 'anonymousNbt');
+            return buffer;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // How this version's slot writes the block_entity_data component: a bare
+    // compound up to 1.21.10, then { type: registry id, data: compound }.
+    let componentShape;
+    function blockEntityShape(version) {
+        if (componentShape !== undefined) return componentShape;
+        const data = dataFor(version) || mcData;
+        let found = null;
+        const walk = node => {
+            if (found || !node || typeof node !== 'object') return;
+            if (node.fields && node.fields.block_entity_data !== undefined) {
+                found = node.fields.block_entity_data;
+                return;
+            }
+            for (const value of Object.values(node)) walk(value);
+        };
+        walk(data?.protocol?.types || {});
+        componentShape = found;
+        return componentShape;
+    }
+
+    function blockEntityComponent(command, version) {
+        const tag = coreBlockEntityNbt(command);
+        if (!tag) return null;
+
+        const shape = blockEntityShape(version);
+        if (!shape) return null;
+
+        if (shape === 'anonymousNbt') {
+            return { type: 'block_entity_data', data: tag };
+        }
+
+        // { type: <block entity registry id>, data: <compound> } as raw bytes
+        if (commandBlockEntityType === null) return null;
+        const bytes = encodeNbt(tag);
+        if (!bytes) return null;
+        return {
+            type: 'block_entity_data',
+            data: Buffer.concat([varintBytes(commandBlockEntityType), bytes])
+        };
+    }
+
+    // Puts the core block into the selected hotbar slot with the creative slot
+    // packet, so no /give with coordinates appears in the server log.
+    function holdCoreBlock(command) {
+        const id = coreBlockItemId();
+        if (!Number.isInteger(id)) {
+            log(`No item id for ${BLOCK} in this version's data`);
+            return false;
+        }
+
+        const version = dataVersion();
+        const Factory = itemFactory(version);
+        const legacyNbt = command ? legacyCoreBlockNbt(command) : null;
+        let item = { present: true, itemId: id, itemCount: 1 };
+        let carriedNbt = false;
+
+        try {
+            const notch = Factory ? Factory.toNotch(new Factory(id, 1, legacyNbt)) : null;
+            if (notch) item = notch;
+
+            if (notch && notch.nbtData) {
+                carriedNbt = true; // 1.20.4 and older carry BlockEntityTag
+            } else if (command && notch && Array.isArray(notch.components)) {
+                const component = blockEntityComponent(command, version);
+                if (component) {
+                    notch.components = [component];
+                    notch.addedComponentCount = 1;
+                    notch.removeComponents = [];
+                    carriedNbt = true;
+                } else {
+                    log(`${BLOCK} has no block entity data in this version's slots; using the packet`);
+                }
+            }
+        } catch (e) {
+            item = { present: true, itemId: id, itemCount: 1 };
+        }
+
+        try {
+            const hotbar = hotbarIndex();
+            bot.write('set_creative_slot', { slot: HOTBAR_SLOT_START + hotbar, item });
+            bot.write('held_item_slot', { slotId: hotbar });
+            return { held: true, nbt: carriedNbt };
+        } catch (e) {
+            console.error(`[${bot.id}] [Core] Could not hold ${BLOCK}:`, e.message || e);
+            return { held: false, nbt: false };
+        }
+    }
+
+    // Breaks the block at (x,y,z) with the dig packets; harmless on water.
+    async function digAt(x, y, z) {
+        try {
+            bot.write('block_dig', { status: 0, location: { x, y, z }, face: 1, sequence: 0 });
+            await sleep(50);
+            bot.write('block_dig', { status: 2, location: { x, y, z }, face: 1, sequence: 0 });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // The server answers a placement with a block update, which is the only
+    // confirmation available without a world model.
+    const blockChanges = new Map();
+    function noteBlockChange(x, y, z) {
+        blockChanges.set(key(x, y, z), Date.now());
+        if (blockChanges.size > 4096) {
+            const cutoff = Date.now() - 60000;
+            for (const [id, ts] of blockChanges) {
+                if (ts < cutoff) blockChanges.delete(id);
+            }
+        }
+    }
+
+    function trackBlockChange(packet) {
+        const location = packet?.location;
+        if (location) noteBlockChange(location.x, location.y, location.z);
+    }
+
+    function sendBlockPlace(location, direction) {
+        const payload = {
+            hand: 0,
+            location,
+            direction,
+            cursorX: 0.5,
+            cursorY: 1,
+            cursorZ: 0.5,
+            insideBlock: false,
+            worldBorderHit: false,
+            sequence: 0
+        };
+        for (const name of ['block_place', 'use_item_on']) {
+            try {
+                if (bot.write(name, payload) !== false) return true;
+            } catch (e) {
+                // packet name not in this version, try the next one
+            }
+        }
+        return false;
+    }
+
+    function writeCoreCommand(x, y, z, command) {
+        try {
+            return bot.write('update_command_block', {
+                location: { x, y, z },
+                command: String(command).replace(/^\//, ''),
+                mode: 1,
+                flags: 0b101
+            }) !== false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Clears (x,y,z) and puts the core block there, then writes the command into
+    // it. Returns the position it ended up at, or null.
+    async function tryPlaceAt(x, y, z, command, carriedNbt) {
+        markOwn(x, y, z);
+        sendAbilities();
+
+        // Break the cell and wait for its own block update first: that update is
+        // the baseline the placement confirmation is compared against, otherwise
+        // a dig reply arriving late would look like a successful placement.
+        const id = key(x, y, z);
+        const beforeDig = blockChanges.get(id) || 0;
+        await digAt(x, y, z);
+        const digStart = Date.now();
+        while (Date.now() - digStart < 400 && (blockChanges.get(id) || 0) === beforeDig) {
+            await sleep(25);
+        }
+        const mark = blockChanges.get(id) || 0;
+        const changedAfter = candidate => (blockChanges.get(candidate) || 0) > mark;
+
+        const confirm = async timeout => {
+            const started = Date.now();
+            while (Date.now() - started < timeout) {
+                if ((blockChanges.get(id) || 0) > mark) return true;
+                await sleep(40);
+            }
+            return false;
+        };
+        // The server places into the clicked cell when it is replaceable and on
+        // the clicked face otherwise, so an unexpected neighbouring change means
+        // the cell was not what we assumed - stop instead of scattering blocks.
+        const stray = () => changedAfter(key(x, y - 1, z)) || changedAfter(key(x, y + 1, z));
+
+        // 1) into the cell itself: air after the dig, replaced water/lava, and a
+        //  still-solid cell (dig refused) lands above it instead - which the
+        // stray check below catches before a second packet is sent.
+        sendBlockPlace({ x, y, z }, 1);
+        let placed = await confirm(500);
+        if (!placed && stray()) {
+            log(`The core spot ${x} ${y} ${z} is still solid`);
+            return null;
+        }
+        // 2) on the top face of the block below
+        if (!placed) {
+            sendBlockPlace({ x, y: y - 1, z }, 1);
+            placed = await confirm(500);
+            if (!placed && stray()) {
+                log(`The cell below ${x} ${y} ${z} was not solid`);
+                return null;
+            }
+        }
+        // 3) from the block above, looking down
+        if (!placed) {
+            sendBlockPlace({ x, y: y + 1, z }, 0);
+            placed = await confirm(500);
+        }
+        if (!placed) return null;
+
+        markOwn(x, y, z);
+        // The item already carries Command + auto where the version supports it;
+        // this covers the versions whose slot format drops item NBT.
+        if (!writeCoreCommand(x, y, z, command)) {
+            if (!carriedNbt) {
+                log(`Could not write the command into the core block at ${x} ${y} ${z}`);
+                return null;
+            }
+            log(`Command packet for ${x} ${y} ${z} failed; keeping the item NBT`);
+        }
+        return { x, y, z };
+    }
+
+    // The block under the bot's feet is the wanted spot, but a server can refuse
+    // it (spawn protection, the bot's own hitbox in the hole), so the neighbours
+    // are tried before giving up.
+    async function placeCommandBlockAt(x, y, z, command) {
+        const held = holdCoreBlock(command);
+        if (!held.held) return null;
+        await sleep(120); // let the server apply the creative slot
+
+        const candidates = [
+            { x, y, z },
+            { x: x + 1, y, z },
+            { x: x - 1, y, z },
+            { x, y, z: z + 1 },
+            { x, y, z: z - 1 }
+        ];
+
+        for (const candidate of candidates) {
+            if (inside(candidate.x, candidate.y, candidate.z)) continue;
+            const placed = await tryPlaceAt(candidate.x, candidate.y, candidate.z, command, held.nbt);
+            if (placed) return placed;
+            log(`No block at ${candidate.x} ${candidate.y} ${candidate.z}, trying the next spot`);
+        }
+
+        log(`Could not place the core block near ${x} ${y} ${z}`);
         return null;
     }
 
-    function scheduleDamage(reason = 'damage') {
-        if (Date.now() < graceUntil) return;
-        if (refilling) { damageDuringRefill = true; return; }
-        if (cooldown) { damagePending = true; return; }
-        if (damageTimer) clearTimeout(damageTimer);
-        damageTimer = setTimeout(() => {
-            damageTimer = null;
-            if (!position || !REFILL_ENABLED) return;
-            if (refilling) return;
-            if (cooldown) { damagePending = true; return; }
-            bot.core.refill(reason);
-        }, DAMAGE_DELAY);
-    }
-
+    // A failed refill used to retry exactly once and then give up forever, which
+    // left core.ready false and made every command disappear without any message.
     function scheduleRefillRetry() {
-        if (refillRetryTimer) clearTimeout(refillRetryTimer);
+        if (!REFILL_ENABLED || refillRetryTimer) return;
+
+        const delay = Math.min(refillRetryDelay, 30000);
+        refillRetryDelay = Math.min(refillRetryDelay * 2, 30000);
+
+        console.warn(`[${bot.id}] [Core] Refill failed; retrying in ${delay}ms`);
+
         refillRetryTimer = setTimeout(() => {
             refillRetryTimer = null;
-            if (!position || !REFILL_ENABLED) return;
-            if (refilling || cooldown) return;
-            refillRetryDelay = Math.min(refillRetryDelay * 2, 30000);
-            bot.core.refill('retry', true);
-        }, refillRetryDelay);
+
+            if (refilling || cooldown || !position) {
+                scheduleRefillRetry();
+                return;
+            }
+
+            bot.core.refill('retry');
+        }, delay);
+
+        refillRetryTimer.unref?.();
     }
 
-    function createCoreMap(alive = false) {
+    // Command blocks only tick in loaded chunks. In hide mode the bot is
+    // teleported into the core, so if it is far away the teleport was refused
+    // and every write below would silently do nothing.
+    function coreAreaLoaded() {
+        if (!position) return false;
+        const origin = bot.core?.origin;
+        if (!origin || origin.x === null || origin.z === null) return false;
+
+        const centerX = origin.x + (SIZE - 1) / 2;
+        const centerZ = origin.z + (SIZE - 1) / 2;
+        const radius = SIZE + 32;
+
+        return Math.abs(position.x - centerX) <= radius && Math.abs(position.z - centerZ) <= radius;
+    }
+
+    function createCoreMap(initialAlive = false) {
         coreBlocks.clear();
         if (bot.core.origin.x === null) return;
-        const ox = bot.core.origin.x, oy = bot.core.origin.y, oz = bot.core.origin.z;
-        const bx = bot.core.bounds.x, by = bot.core.bounds.y, bz = bot.core.bounds.z;
-        const now = Date.now();
-        for (let x = ox; x <= bx; x++) {
-            for (let y = oy; y <= by; y++) {
-                for (let z = oz; z <= bz; z++) {
-                    coreBlocks.set(key(x, y, z), { alive: !!alive, verifiedAt: alive ? now : 0 });
+        const now = initialAlive ? Date.now() : 0;
+        for (let x = bot.core.origin.x; x <= bot.core.bounds.x; x++) {
+            for (let y = bot.core.origin.y; y <= bot.core.bounds.y; y++) {
+                for (let z = bot.core.origin.z; z <= bot.core.bounds.z; z++) {
+                    coreBlocks.set(key(x, y, z), {
+                        alive: initialAlive,
+                        verifiedAt: now
+                    });
                 }
             }
         }
     }
 
-    function coreAreaLoaded() {
-        if (!position || bot.core.origin.x === null) return false;
-        // Simple heuristic: allow attempts; real readiness is managed by refill/state.
-        return true;
+    function markBlock(x, y, z, alive, verified = true) {
+        const entry = coreBlocks.get(key(x, y, z));
+        if (!entry) return;
+        entry.alive = Boolean(alive);
+        if (verified) entry.verifiedAt = Date.now();
     }
 
+    function getRecentlyVerifiedSurvivor() {
+        const now = Date.now();
+        for (const [id, entry] of coreBlocks) {
+            if (!entry.alive || !entry.verifiedAt) continue;
+            if (now - entry.verifiedAt > SURVIVOR_MAX_AGE) continue;
+            
+            const [x, y, z] = id.split(':').map(Number);
+            return { x, y, z };
+        }
+        return null;
+    }
+
+    function scheduleDamage(reason) {
+        if (!REFILL_ENABLED) return;
+        if (!bot.core.ready || refilling) return;
+        if (cooldown) { damagePending = true; return; }
+        if (damageTimer) clearTimeout(damageTimer);
+        damageTimer = setTimeout(() => {
+            damageTimer = null;
+            if (!position || refilling || cooldown) return;
+            bot.core.refill(reason);
+        }, DAMAGE_DELAY);
+    }
 
     async function refill(reason = 'damage', force = false) {
         damagePending = false;
@@ -241,24 +632,29 @@ module.exports = function core(bot) {
         if (bot.core.origin.x === null && !bot.core.reset()) return false;
 
         refilling = true;
+        // Only the very first fill gates readiness. A rebuild triggered by damage
+        // must not make an already working core report "not ready" - that lied
+        // to commands like cb/<core> while the area was still full of blocks.
         if (!coreEverReady) bot.core.ready = false;
         cleanupOwn();
 
         const command = `fill ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${BLOCK} ${MODE}`;
         let success = false;
 
-        // Reuse remains: write the fill into any known surviving core block.
+        // Reuse remains: if a core block still exists, write the fill into it.
         const survivor = getRecentlyVerifiedSurvivor();
         if (survivor && !force) {
             try {
                 markOwn(survivor.x, survivor.y, survivor.z);
                 if (typeof bot.write !== 'function') throw new Error('bot.write unavailable');
+
                 bot.write('update_command_block', {
                     location: survivor,
                     command,
                     mode: 1,
                     flags: 0b101
                 });
+
                 await new Promise(resolve => setTimeout(resolve, 35));
                 success = true;
             } catch (error) {
@@ -269,7 +665,7 @@ module.exports = function core(bot) {
             }
         }
 
-        // Fallback: chat the fill command (allowed only where appropriate; keep as requested).
+        // Fallback: send the fill command via chat.
         if (!success) {
             try {
                 if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
@@ -453,7 +849,7 @@ module.exports = function core(bot) {
                 initialTimer = setTimeout(() => {
                     initialTimer = null;
                     if (position) bot.core.refill('initial');
-                }, INITIAL_DELAY);
+                }, HIDE ? Math.max(INITIAL_DELAY, 8000) : INITIAL_DELAY);
                 return;
             }
             if (HIDE) {
@@ -475,6 +871,7 @@ module.exports = function core(bot) {
         }
     };
 
+    bot.on('block_change', trackBlockChange);
     bot.on('block_change', handlers.onBlockChange);
     bot.on('map_chunk', handlers.onMapChunk);
     bot.on('multi_block_change', handlers.onMultiBlockChange);
@@ -622,7 +1019,32 @@ module.exports = function core(bot) {
         cursor: { x: null, y: Y, z: null },
         _cursor: { x: null, y: Y, z: null },
         pendingTeleport: null,
+        awaitingSurface: false,
+        // Where the physical core block sits; the filled area is origin..bounds.
+        seed: null,
 
+        // /top lands the bot on the surface, and the core block goes in the block
+        // it stands on, so the core follows the bot instead of area.y.
+        setOriginFromSurface(pos) {
+            const x = Math.floor(pos.x);
+            const z = Math.floor(pos.z);
+            // The filled area stays on the configured y level; /top only decides
+            // where the bot - and the core block it places - is standing.
+            this.origin = { x, y: Y, z };
+            this.bounds = { x: x + SIZE - 1, y: Y + SIZE - 1, z: z + SIZE - 1 };
+            this.cursor = { ...this.origin };
+            this._cursor = { ...this.origin };
+            this.seed = { x, y: Math.floor(pos.y) - 1, z };
+            chunkX = Math.floor(x / 16);
+            chunkZ = Math.floor(z / 16);
+            this.ready = false;
+            ownChanges.clear();
+            damagePending = false;
+            damageDuringRefill = false;
+            graceUntil = 0;
+            createCoreMap(false);
+            log(`Core area at ${x} ${Y} ${z}; core block goes at ${x} ${this.seed.y} ${z}`);
+        },
 
         reset() {
             if (HIDE) {
@@ -643,6 +1065,7 @@ module.exports = function core(bot) {
 
                 graceUntil = 0;
                 createCoreMap(false);
+                this.seed = { x: rx, y: Y, z: rz };
                 this.pendingTeleport = { x: rx, y: Y, z: rz };
                 console.log(`[${bot.id}] [Core] Hidden at ${rx} ${Y} ${rz}`);
                 return true;
@@ -656,7 +1079,7 @@ module.exports = function core(bot) {
             this.bounds = { x: x + SIZE - 1, y: Y + SIZE - 1, z: z + SIZE - 1 };
             this.cursor = { ...this.origin };
             this._cursor = { ...this.origin };
-
+            this.seed = { x, y: Y, z };
             chunkX = cx;
             chunkZ = cz;
             this.ready = false;
@@ -800,6 +1223,8 @@ module.exports = function core(bot) {
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
             if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
+            bot.removeListener('registry_data', onRegistryData);
+            bot.removeListener('block_change', trackBlockChange);
             bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
             bot.removeListener('multi_block_change', handlers.onMultiBlockChange);
@@ -822,7 +1247,7 @@ module.exports = function core(bot) {
             coreBlocks.clear();
             this.ready = false;
             this.pendingTeleport = null;
-
+            this.awaitingSurface = false;
             this.origin = { x: null, y: Y, z: null };
             this.bounds = { x: null, y: Y + SIZE - 1, z: null };
             this.cursor = { x: null, y: Y, z: null };
