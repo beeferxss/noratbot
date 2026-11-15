@@ -88,7 +88,7 @@ module.exports = function core(bot) {
     let cooldown = false;
     let damagePending = false;
     let damageDuringRefill = false;
-    let backupReady = false;
+
     let coreEverReady = false;
     let graceUntil = 0;
     let refillRetryScheduled = false;
@@ -624,7 +624,7 @@ module.exports = function core(bot) {
         damageDuringRefill = false;
         graceUntil = 0;
         if (force) { cooldown = false; refilling = false; }
-        // keep backupReady across refills
+
         if (!REFILL_ENABLED) return false;
         if (!position) return false;
         if (refilling && !force) return false;
@@ -688,48 +688,10 @@ module.exports = function core(bot) {
             }
         }
 
-        // Hide mode must not leak the core position, so it never falls back to a
-        // chat command; it retries the block method instead.
-        if (!success && !HIDE) {
-            try {
-                if (typeof bot.chat !== 'function') throw new Error('bot.chat unavailable');
-                success = bot.chat('/' + command) !== false;
-            } catch (error) {
-                console.error(`[${bot.id}] [Core] Chat refill error:`, error);
-            }
-        }
-
-        if (!success && backupReady && !HIDE) {
-            try {
-                const bx = bot.core.origin.x + 1000;
-                const by = bot.core.origin.y;
-                const bz = bot.core.origin.z + 1000;
-                const cloneCmd = `clone ${bx} ${by} ${bz} ${bx + SIZE - 1} ${by + SIZE - 1} ${bz + SIZE - 1} ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} replace`;
-                success = bot.chat('/' + cloneCmd) !== false;
-            } catch (error) {
-                console.error(`[${bot.id}] [Core] Clone fallback error:`, error);
-                success = false;
-            }
-        }
-
         if (!success) {
             refilling = false;
             scheduleRefillRetry();
             return false;
-        }
-
-        // Create a backup copy for future clone restores.
-        if (!backupReady && !HIDE) {
-            try {
-                const bx = bot.core.origin.x + 1000;
-                const by = bot.core.origin.y;
-                const bz = bot.core.origin.z + 1000;
-                const cloneCmd = `clone ${bot.core.origin.x} ${bot.core.origin.y} ${bot.core.origin.z} ${bot.core.bounds.x} ${bot.core.bounds.y} ${bot.core.bounds.z} ${bx} ${by} ${bz} replace`;
-                bot.chat('/' + cloneCmd);
-                backupReady = true;
-            } catch (error) {
-                // ignore backup failures
-            }
         }
 
         for (const entry of coreBlocks.values()) {
@@ -1116,7 +1078,6 @@ module.exports = function core(bot) {
             ownChanges.clear();
             damagePending = false;
             damageDuringRefill = false;
-            backupReady = false;
             graceUntil = 0;
             createCoreMap(false);
             log(`Core area at ${x} ${Y} ${z}; core block goes at ${x} ${this.seed.y} ${z}`);
@@ -1138,7 +1099,7 @@ module.exports = function core(bot) {
                 ownChanges.clear();
                 damagePending = false;
                 damageDuringRefill = false;
-                backupReady = false;
+
                 graceUntil = 0;
                 createCoreMap(false);
                 this.seed = { x: rx, y: Y, z: rz };
@@ -1319,7 +1280,6 @@ module.exports = function core(bot) {
             ownChanges.clear();
             damagePending = false;
             damageDuringRefill = false;
-            backupReady = false;
             graceUntil = 0;
             coreBlocks.clear();
             this.ready = false;
