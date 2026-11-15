@@ -1041,6 +1041,15 @@ function stripAnsiCodes(text) {
     return String(text).replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g, '');
 }
 
+// The same line reaches the bridge both as ansi-rendered chat_raw and as
+// chat_plain ("Name: text"); normalise both to one key so it is relayed once.
+function dedupeKey(text) {
+    let key = stripAnsiCodes(text).trim();
+    key = key.replace(/^(\[[^\]]+\]\s*)+/g, '');
+    key = key.replace(/^<([^>]+)>\s*/, '$1: ');
+    return key.replace(/\s+/g, ' ').trim();
+}
+
 const DISCORD_ANSI_COLORS = [
     { code: 30, rgb: [0, 0, 0] },
     { code: 31, rgb: [170, 0, 0] },
@@ -1125,7 +1134,7 @@ function attachRelay(bot, channelId) {
     };
 
     relay.enqueue = text => {
-        const value = protectFences(String(text ?? '').replace(/\u0000/g, ''));
+        const value = protectFences(toDiscordAnsi(String(text ?? '').replace(/\u0000/g, '')));
         if (!value.trim()) return;
 
         for (const chunk of splitText(value, RELAY.limit)) {
@@ -1192,38 +1201,47 @@ function attachRelay(bot, channelId) {
         }
     };
 
-    const isDuplicate = (plain) => {
+    const alreadySeen = (text, ttl = 3000) => {
+        const key = dedupeKey(text);
+        if (!key) return true;
+
         const now = Date.now();
-        const ts = relay.recent.get(plain);
-        if (ts && now - ts < 2000) return true;
-        relay.recent.set(plain, now);
+        const ts = relay.recent.get(key);
+        if (ts && now - ts < ttl) return true;
+
+        relay.recent.set(key, now);
         if (relay.recent.size > 100) {
             for (const [k, t] of relay.recent) {
-                if (now - t > 5000) relay.recent.delete(k);
+                if (now - t > 10000) relay.recent.delete(k);
             }
         }
+
         return false;
     };
 
-    const onChat = (username, message) => {
-        const text = (typeof username === 'string' && message != null)
-            ? `${username}: ${message}`
-            : (message != null ? String(message) : (username != null ? String(username) : ''));
+    // chat_raw carries the server's own colours; chat_plain is the same line
+    // without them, so it is only used as a fallback when raw was already seen.
+    const onChatRaw = (ansi) => {
+        if (typeof ansi !== 'string') return;
+
+        const text = ansi.replace(/\u0000/g, '').replace(/\s+$/, '');
         if (!text.trim()) return;
-        const plain = stripAnsiCodes(text);
-        if (consumeEcho(relay, plain)) return;
-        if (isDuplicate(plain)) return;
+        if (text.includes('[PLAYER_LIST]')) return;
+        if (consumeEcho(relay, stripAnsiCodes(text))) return;
+        if (alreadySeen(text)) return;
+
         relay.enqueue(text);
     };
 
     const onChatPlain = (plainText) => {
         if (!plainText || typeof plainText !== 'string') return;
+
         const text = String(plainText).trim();
         if (!text) return;
         if (text.includes('[PLAYER_LIST]')) return;
-        const plain = stripAnsiCodes(text);
-        if (consumeEcho(relay, plain)) return;
-        if (isDuplicate(plain)) return;
+        if (consumeEcho(relay, stripAnsiCodes(text))) return;
+        if (alreadySeen(text)) return;
+
         relay.enqueue(text);
     };
 
@@ -1248,7 +1266,7 @@ function attachRelay(bot, channelId) {
             relay.timer = null;
         }
 
-        bot.removeListener('chat', onChat);
+        bot.removeListener('chat_raw', onChatRaw);
         bot.removeListener('chat_plain', onChatPlain);
         bot.removeListener('bot:disconnect', onDisconnect);
         bot.removeListener('bot:destroy', onDestroy);
@@ -1260,7 +1278,7 @@ function attachRelay(bot, channelId) {
         }
     };
 
-    bot.on('chat', onChat);
+    bot.on('chat_raw', onChatRaw);
     bot.on('chat_plain', onChatPlain);
     bot.on('bot:disconnect', onDisconnect);
     bot.once('bot:destroy', onDestroy);
@@ -2085,5 +2103,7 @@ module.exports._internal = {
     toSNBT,
     parseSNBT,
     takeBatch,
-    protectFences
+    protectFences,
+    dedupeKey,
+    toDiscordAnsi
 };
