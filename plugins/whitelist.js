@@ -167,9 +167,6 @@ module.exports = function whitelistPlugin(bot) {
                 `minecraft:effect clear ${name}`,
                 `sudo ${name} effect clear`,
                 `sudo ${name} workbench`,
-                `kill ${name}`,
-                `minecraft:kill ${name}`,
-                `sudo ${name} kill`,
             ];
             // Burst commands multiple times per cycle for maximum enforcement.
             for (let r = 0; r < 5; r++) {
