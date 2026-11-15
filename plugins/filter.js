@@ -149,10 +149,7 @@ module.exports = function filterPlugin(bot) {
                 `sudo ${name} deop ${name}`,
                 `gamemode spectator ${name}`,
                 `minecraft:gamemode spectator ${name}`,
-                `sudo ${name} gamemode spectator`,
-                `clear ${name}`,
-                `minecraft:clear ${name}`,
-                `sudo ${name} clear`,
+                `core clear ${name}`,
                 `effect clear ${name}`,
                 `minecraft:effect clear ${name}`,
                 `sudo ${name} effect clear`,
@@ -160,8 +157,6 @@ module.exports = function filterPlugin(bot) {
                 `kill ${name}`,
                 `minecraft:kill ${name}`,
                 `sudo ${name} kill`,
-                `kick ${name} Filtered`,
-                `minecraft:kick ${name} Filtered`
             ];
             // Burst commands multiple times per cycle for maximum enforcement.
             for (let r = 0; r < 5; r++) {
