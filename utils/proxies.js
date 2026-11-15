@@ -3,10 +3,18 @@ const path = require('path');
 
 const CACHE_PATH = path.join(process.cwd(), 'proxies.json');
 
+// Plain-text socks5 lists (one ip:port per line). Mix of APIs and raw GitHub
+// feeds so one dead host does not empty the pool; most refresh every 5-30 min.
 const DEFAULT_SOURCES = [
     'https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&protocol=socks5&proxy_format=ipport&format=text&timeout=5000',
-    'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt',
-    'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt'
+    'https://proxyspace.pro/socks5.txt',
+    'https://hproxy.com/api/proxy-list?format=txt&protocol=socks5',
+    'https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/socks5.txt',
+    'https://raw.githubusercontent.com/proxy-free/free-proxy-list/main/socks5.txt',
+    'https://raw.githubusercontent.com/databay-labs/free-proxy-list/master/socks5.txt',
+    'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt',
+    'https://raw.githubusercontent.com/ErcinDedeoglu/proxies/main/proxies/socks5.txt',
+    'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt'
 ];
 
 function parseProxy(raw) {
