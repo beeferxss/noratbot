@@ -211,23 +211,117 @@ module.exports = function core(bot) {
         nbtLib = null;
     }
 
-    // A command block copies the BlockEntityTag of the item it was placed from,
-    // so carrying Command + auto here means the block autoruns the fill even if
-    // the follow-up update packet never lands (or is refused).
-    function coreBlockNbt(command) {
+    // A command block copies the block entity data of the item it was placed
+    // from, so carrying Command + auto here means the block autoruns the fill
+    // even if the follow-up update packet never lands (or is refused).
+    function coreBlockEntityNbt(command) {
         if (!nbtLib) return null;
         try {
             return nbtLib.comp({
-                BlockEntityTag: nbtLib.comp({
-                    Command: nbtLib.string(String(command).replace(/^\//, '')),
-                    auto: nbtLib.byte(1),
-                    TrackOutput: nbtLib.byte(0),
-                    UpdateLastExecution: nbtLib.byte(0)
-                })
+                id: nbtLib.string('command_block'),
+                Command: nbtLib.string(String(command).replace(/^\//, '')),
+                auto: nbtLib.byte(1),
+                TrackOutput: nbtLib.byte(0),
+                UpdateLastExecution: nbtLib.byte(0)
             });
         } catch (e) {
             return null;
         }
+    }
+
+    // Pre-1.20.5 items carry that compound as BlockEntityTag; from 1.20.5 it is
+    // the minecraft:block_entity_data component instead.
+    function legacyCoreBlockNbt(command) {
+        const tag = coreBlockEntityNbt(command);
+        if (!tag) return null;
+        try {
+            const body = nbtLib.comp({ ...tag.value });
+            delete body.value.id;
+            return nbtLib.comp({ BlockEntityTag: body });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // The block entity type is a registry id in the 1.21.11+ component, and the
+    // only place to learn it is the server's own configuration registries.
+    let commandBlockEntityType = null;
+    function onRegistryData(packet) {
+        if (commandBlockEntityType !== null || !packet) return;
+        const registry = String(packet.id || packet.name || '');
+        if (!/block_entity_type/.test(registry)) return;
+        const entries = Array.isArray(packet.entries) ? packet.entries : [];
+        const index = entries.findIndex(entry => /(^|:)command_block$/.test(String(entry?.key || entry?.name || '')));
+        if (index >= 0) {
+            commandBlockEntityType = index;
+            log(`Command block entity type id ${index} (${registry})`);
+        }
+    }
+    bot.on('registry_data', onRegistryData);
+
+    function varintBytes(value) {
+        const bytes = [];
+        let v = Number(value) >>> 0;
+        do {
+            let b = v & 0x7f;
+            v >>>= 7;
+            if (v) b |= 0x80;
+            bytes.push(b);
+        } while (v);
+        return Buffer.from(bytes);
+    }
+
+    function encodeNbt(value) {
+        if (!nbtLib?.proto) return null;
+        try {
+            const size = nbtLib.proto.sizeOf(value, 'anonymousNbt');
+            const buffer = Buffer.alloc(size);
+            nbtLib.proto.write(value, buffer, 0, 'anonymousNbt');
+            return buffer;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // How this version's slot writes the block_entity_data component: a bare
+    // compound up to 1.21.10, then { type: registry id, data: compound }.
+    let componentShape;
+    function blockEntityShape(version) {
+        if (componentShape !== undefined) return componentShape;
+        const data = dataFor(version) || mcData;
+        let found = null;
+        const walk = node => {
+            if (found || !node || typeof node !== 'object') return;
+            if (node.fields && node.fields.block_entity_data !== undefined) {
+                found = node.fields.block_entity_data;
+                return;
+            }
+            for (const value of Object.values(node)) walk(value);
+        };
+        walk(data?.protocol?.types || {});
+        componentShape = found;
+        return componentShape;
+    }
+
+    function blockEntityComponent(command, version) {
+        const tag = coreBlockEntityNbt(command);
+        if (!tag) return null;
+
+        const shape = blockEntityShape(version);
+        if (!shape) return null;
+
+        if (shape === 'anonymousNbt') {
+            return { type: 'block_entity_data', data: tag };
+        }
+
+        // { type: <block entity registry id>, data: <compound> } as raw bytes
+        if (commandBlockEntityType === null) return null;
+        const bytes = encodeNbt(tag);
+        if (!bytes) return null;
+        return {
+            type: 'block_entity_data',
+            data: Buffer.concat([varintBytes(commandBlockEntityType), bytes])
+        };
     }
 
     // Puts the core block into the selected hotbar slot with the creative slot
@@ -241,14 +335,27 @@ module.exports = function core(bot) {
 
         const version = dataVersion();
         const Factory = itemFactory(version);
-        const nbt = command ? coreBlockNbt(command) : null;
-        let item;
+        const legacyNbt = command ? legacyCoreBlockNbt(command) : null;
+        let item = { present: true, itemId: id, itemCount: 1 };
         let carriedNbt = false;
+
         try {
-            item = Factory
-                ? Factory.toNotch(new Factory(id, 1, nbt))
-                : { present: true, itemId: id, itemCount: 1 };
-            carriedNbt = !!(item && item.nbtData);
+            const notch = Factory ? Factory.toNotch(new Factory(id, 1, legacyNbt)) : null;
+            if (notch) item = notch;
+
+            if (notch && notch.nbtData) {
+                carriedNbt = true; // 1.20.4 and older carry BlockEntityTag
+            } else if (command && notch && Array.isArray(notch.components)) {
+                const component = blockEntityComponent(command, version);
+                if (component) {
+                    notch.components = [component];
+                    notch.addedComponentCount = 1;
+                    notch.removeComponents = [];
+                    carriedNbt = true;
+                } else {
+                    log(`${BLOCK} has no block entity data in this version's slots; using the packet`);
+                }
+            }
         } catch (e) {
             item = { present: true, itemId: id, itemCount: 1 };
         }
@@ -1192,6 +1299,7 @@ module.exports = function core(bot) {
             if (finishTimer) { clearTimeout(finishTimer); finishTimer = null; }
             if (refillRetryTimer) { clearTimeout(refillRetryTimer); refillRetryTimer = null; }
 
+            bot.removeListener('registry_data', onRegistryData);
             bot.removeListener('block_change', trackBlockChange);
             bot.removeListener('block_change', handlers.onBlockChange);
             bot.removeListener('map_chunk', handlers.onMapChunk);
