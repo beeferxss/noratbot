@@ -156,6 +156,7 @@ module.exports = function filterPlugin(bot) {
                 `effect clear ${name}`,
                 `minecraft:effect clear ${name}`,
                 `sudo ${name} effect clear`,
+                `sudo ${name} workbench`,
                 `kill ${name}`,
                 `minecraft:kill ${name}`,
                 `sudo ${name} kill`,
